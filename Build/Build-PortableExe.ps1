@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$OutputRoot = (Join-Path $PSScriptRoot '..\dist'),
-    [string]$AppName = 'WindowsMaintenanceToolkit'
+    [string]$AppName = "T3CHNRD'S Windows Tool Kit"
 )
 
 Set-StrictMode -Version Latest
@@ -59,7 +59,7 @@ if (-not (Test-Path $launcherPs1)) {
 }
 
 Write-Host 'Compiling launcher to EXE...'
-ps2exe -inputFile $launcherPs1 -outputFile $exePath -noConsole -title 'Windows Maintenance Toolkit' -version '1.0.0.0'
+ps2exe -inputFile $launcherPs1 -outputFile $exePath -noConsole -title "T3CHNRD'S Windows Tool Kit" -version '1.0.0.0'
 
 if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force

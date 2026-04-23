@@ -17,7 +17,7 @@ Add-Type -AssemblyName System.Drawing
 $tasks = Get-ToolkitTaskCatalog | Sort-Object Category, Name
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Windows Maintenance Toolkit'
+$form.Text = "T3CHNRD'S Windows Tool Kit"
 $form.StartPosition = 'CenterScreen'
 $form.Size = New-Object System.Drawing.Size(1100, 700)
 $form.MinimumSize = New-Object System.Drawing.Size(1000, 650)
@@ -31,7 +31,7 @@ $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(26, 45, 78)
 $form.Controls.Add($headerPanel)
 
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Text = 'Windows Maintenance Toolkit'
+$titleLabel.Text = "T3CHNRD'S Windows Tool Kit"
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $titleLabel.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 16, [System.Drawing.FontStyle]::Bold)
 $titleLabel.AutoSize = $true

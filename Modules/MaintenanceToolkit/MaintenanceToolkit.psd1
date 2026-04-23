@@ -5,7 +5,7 @@
     Author = 'Toolkit Builder'
     CompanyName = 'Personal Toolkit'
     Copyright = '(c) 2026'
-    Description = 'Core module for the Windows Maintenance Toolkit.'
+    Description = "Core module for T3CHNRD'S Windows Tool Kit."
     PowerShellVersion = '5.1'
     FunctionsToExport = @(
         'Get-ToolkitRoot',

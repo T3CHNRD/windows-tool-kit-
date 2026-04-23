@@ -2,7 +2,7 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product
     Id="*"
-    Name="Windows Maintenance Toolkit"
+    Name="T3CHNRD'S Windows Tool Kit"
     Language="1033"
     Version="1.0.0"
     Manufacturer="Personal Toolkit"
@@ -14,15 +14,15 @@
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLFOLDER" Name="WindowsMaintenanceToolkit" />
+        <Directory Id="INSTALLFOLDER" Name="T3CHNRD'S Windows Tool Kit" />
       </Directory>
       <Directory Id="ProgramMenuFolder">
-        <Directory Id="ProgramMenuDir" Name="Windows Maintenance Toolkit" />
+        <Directory Id="ProgramMenuDir" Name="T3CHNRD'S Windows Tool Kit" />
       </Directory>
       <Directory Id="DesktopFolder" />
     </Directory>
 
-    <Feature Id="MainFeature" Title="Windows Maintenance Toolkit" Level="1">
+    <Feature Id="MainFeature" Title="T3CHNRD'S Windows Tool Kit" Level="1">
       <ComponentGroupRef Id="CG_MaintToolkit" />
       <ComponentRef Id="ShortcutComponent" />
     </Feature>
@@ -30,24 +30,24 @@
     <UIRef Id="WixUI_Minimal" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
-    <Icon Id="ToolkitIcon" SourceFile="$(var.SourceDir)\WindowsMaintenanceToolkit.exe" />
+    <Icon Id="ToolkitIcon" SourceFile="$(var.SourceDir)\T3CHNRD'S Windows Tool Kit.exe" />
     <Property Id="ARPPRODUCTICON" Value="ToolkitIcon" />
 
     <Component Id="ShortcutComponent" Guid="4B58A5F1-419A-43E7-A9D1-5E0E05963C30" Directory="INSTALLFOLDER">
       <Shortcut
         Id="StartMenuShortcut"
         Directory="ProgramMenuDir"
-        Name="Windows Maintenance Toolkit"
+        Name="T3CHNRD'S Windows Tool Kit"
         WorkingDirectory="INSTALLFOLDER"
-        Target="[INSTALLFOLDER]WindowsMaintenanceToolkit.exe" />
+        Target="[INSTALLFOLDER]T3CHNRD'S Windows Tool Kit.exe" />
       <Shortcut
         Id="DesktopShortcut"
         Directory="DesktopFolder"
-        Name="Windows Maintenance Toolkit"
+        Name="T3CHNRD'S Windows Tool Kit"
         WorkingDirectory="INSTALLFOLDER"
-        Target="[INSTALLFOLDER]WindowsMaintenanceToolkit.exe" />
+        Target="[INSTALLFOLDER]T3CHNRD'S Windows Tool Kit.exe" />
       <RemoveFolder Id="ProgramMenuDirRemove" Directory="ProgramMenuDir" On="uninstall" />
-      <RegistryValue Root="HKLM" Key="Software\WindowsMaintenanceToolkit" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+      <RegistryValue Root="HKLM" Key="Software\T3CHNRDsWindowsToolKit" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
   </Product>
 </Wix>

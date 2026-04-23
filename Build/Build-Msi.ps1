@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$OutputRoot = (Join-Path $PSScriptRoot '..\dist'),
-    [string]$AppName = 'WindowsMaintenanceToolkit',
+    [string]$AppName = "T3CHNRD'S Windows Tool Kit",
     [switch]$SkipPortableBuild
 )
 
