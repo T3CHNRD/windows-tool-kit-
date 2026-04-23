@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="Windows Maintenance Toolkit"
+    Language="1033"
+    Version="1.0.0"
+    Manufacturer="Personal Toolkit"
+    UpgradeCode="F3C30DC1-8962-451B-B811-5285D0EA2DB6">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="WindowsMaintenanceToolkit" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ProgramMenuDir" Name="Windows Maintenance Toolkit" />
+      </Directory>
+      <Directory Id="DesktopFolder" />
+    </Directory>
+
+    <Feature Id="MainFeature" Title="Windows Maintenance Toolkit" Level="1">
+      <ComponentGroupRef Id="CG_MaintToolkit" />
+      <ComponentRef Id="ShortcutComponent" />
+    </Feature>
+
+    <UIRef Id="WixUI_Minimal" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <Icon Id="ToolkitIcon" SourceFile="$(var.SourceDir)\WindowsMaintenanceToolkit.exe" />
+    <Property Id="ARPPRODUCTICON" Value="ToolkitIcon" />
+
+    <Component Id="ShortcutComponent" Guid="4B58A5F1-419A-43E7-A9D1-5E0E05963C30" Directory="INSTALLFOLDER">
+      <Shortcut
+        Id="StartMenuShortcut"
+        Directory="ProgramMenuDir"
+        Name="Windows Maintenance Toolkit"
+        WorkingDirectory="INSTALLFOLDER"
+        Target="[INSTALLFOLDER]WindowsMaintenanceToolkit.exe" />
+      <Shortcut
+        Id="DesktopShortcut"
+        Directory="DesktopFolder"
+        Name="Windows Maintenance Toolkit"
+        WorkingDirectory="INSTALLFOLDER"
+        Target="[INSTALLFOLDER]WindowsMaintenanceToolkit.exe" />
+      <RemoveFolder Id="ProgramMenuDirRemove" Directory="ProgramMenuDir" On="uninstall" />
+      <RegistryValue Root="HKLM" Key="Software\WindowsMaintenanceToolkit" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Product>
+</Wix>

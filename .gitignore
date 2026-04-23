@@ -1,0 +1,14 @@
+# Logs
+Logs/*.log
+
+# Temporary exports
+Logs/*.csv
+*.tmp
+*.zip
+
+# PowerShell module cache
+*.psm1.bak
+
+# Build outputs
+dist/
+Build/Installer/HarvestedFiles.wxs
