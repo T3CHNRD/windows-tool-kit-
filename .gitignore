@@ -11,4 +11,8 @@ Logs/*.csv
 
 # Build outputs
 dist/
+dist-build-*/
+dist-latest/
+T3CHNRD'S Windows Tool Kit.exe
+T3CHNRD'S Windows Tool Kit (updated).exe
 Build/Installer/HarvestedFiles.wxs

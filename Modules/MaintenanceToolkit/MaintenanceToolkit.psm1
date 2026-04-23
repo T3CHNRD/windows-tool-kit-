@@ -1,9 +1,17 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Resolve-ToolkitPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    return [string](Convert-Path -Path $Path)
+}
+
 function Get-ToolkitRoot {
     $modulePath = $PSScriptRoot
-    return (Resolve-Path (Join-Path $modulePath '..\..')).Path
+    return (Resolve-ToolkitPath -Path (Join-Path $modulePath '..\..'))
 }
 
 function Get-ToolkitSettings {
@@ -151,7 +159,8 @@ function Invoke-ToolkitScriptTask {
     param(
         [Parameter(Mandatory = $true)]$Context,
         [Parameter(Mandatory = $true)][string]$ScriptName,
-        [Parameter(Mandatory = $true)][string]$StepName
+        [Parameter(Mandatory = $true)][string]$StepName,
+        [string]$AdditionalArguments = ''
     )
 
     $scriptPath = Join-Path $Context.ToolkitRoot "Scripts\Tasks\$ScriptName"
@@ -160,7 +169,140 @@ function Invoke-ToolkitScriptTask {
     }
 
     $args = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    if ($AdditionalArguments) {
+        $args = "$args $AdditionalArguments"
+    }
     Invoke-ToolkitCommand -Context $Context -FilePath 'powershell.exe' -Arguments $args -StepName $StepName -StartPercent 5 -EndPercent 100 -RequireSuccessExitCode
+}
+
+function Get-ToolkitCategoryOrder {
+    return @(
+        'Applications',
+        'Cleanup',
+        'Deployment',
+        'Misc/Utility',
+        'Network Tools',
+        'OneNote & Documents',
+        'Repair',
+        'Storage / Setup',
+        'Update Tools'
+    )
+}
+
+function Get-LegacyScriptDefinition {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptBaseName
+    )
+
+    $name = $ScriptBaseName.ToLowerInvariant()
+
+    switch ($name) {
+        'bootcertchcker' {
+            return @{
+                Category = 'Misc/Utility'
+                Description = 'Checks current Secure Boot and Windows UEFI CA 2023 certificate presence.'
+                RequiresAdmin = $false
+            }
+        }
+        'check-securebootcert' {
+            return @{
+                Category = 'Misc/Utility'
+                Description = 'Runs a detailed Secure Boot certificate audit and reports the outcome.'
+                RequiresAdmin = $true
+            }
+        }
+        'invoke-ps2exe' {
+            return @{
+                Category = 'Misc/Utility'
+                Description = 'Legacy PS2EXE builder workflow for packaging PowerShell scripts into executables.'
+                RequiresAdmin = $false
+            }
+        }
+        'the network access script' {
+            return @{
+                Category = 'Network Tools'
+                Description = 'Legacy quick-connect helper for opening a remote computer administrative share.'
+                RequiresAdmin = $false
+            }
+        }
+        'fix_onenote_duplicates' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Removes duplicate OneNote content from the configured notebook workflow.'
+                RequiresAdmin = $false
+            }
+        }
+        'how_to_guide' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Reference guide for organizing imported documentation in OneNote.'
+                RequiresAdmin = $false
+            }
+        }
+        'invoke-massduplicatecleanup' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Bulk duplicate cleanup workflow for OneNote documentation pages.'
+                RequiresAdmin = $false
+            }
+        }
+        'launch_onenote' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Launches OneNote and the configured documentation notebook workflow.'
+                RequiresAdmin = $false
+            }
+        }
+        'master audit & smart-skip' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Audits source documentation and skips items already processed into OneNote.'
+                RequiresAdmin = $false
+            }
+        }
+        'master_onenote_importer' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Imports structured documentation content into a OneNote notebook.'
+                RequiresAdmin = $false
+            }
+        }
+        'move_to_onenote' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Moves staged content into OneNote using the original legacy import workflow.'
+                RequiresAdmin = $false
+            }
+        }
+        'move_to_onenote_2' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Secondary OneNote move/import variant from the legacy script set.'
+                RequiresAdmin = $false
+            }
+        }
+        'move_to_onenote_selfcheck' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Validates the OneNote move/import workflow before processing content.'
+                RequiresAdmin = $false
+            }
+        }
+        'sortdoc' {
+            return @{
+                Category = 'OneNote & Documents'
+                Description = 'Sorts incoming documents into the expected staging structure.'
+                RequiresAdmin = $false
+            }
+        }
+        default {
+            return @{
+                Category = 'Applications'
+                Description = "Runs imported legacy script '$ScriptBaseName.ps1' in background mode."
+                RequiresAdmin = $false
+            }
+        }
+    }
 }
 
 function Get-LegacyScriptTasks {
@@ -173,12 +315,13 @@ function Get-LegacyScriptTasks {
     $tasks = @()
     foreach ($script in $scripts) {
         $safeId = ($script.BaseName -replace '[^a-zA-Z0-9]', '')
+        $definition = Get-LegacyScriptDefinition -ScriptBaseName $script.BaseName
         $tasks += [pscustomobject]@{
             Id = "Legacy.$safeId"
             Name = "Legacy: $($script.BaseName)"
-            Category = 'Legacy Imported Scripts'
-            Description = "Runs imported script '$($script.Name)' in background mode."
-            RequiresAdmin = $false
+            Category = $definition.Category
+            Description = $definition.Description
+            RequiresAdmin = $definition.RequiresAdmin
             Handler = {
                 param($Context, $Task)
                 $scriptName = ($Task.Name -replace '^Legacy: ', '') + '.ps1'
@@ -231,7 +374,7 @@ function Get-ToolkitTaskCatalog {
         [pscustomobject]@{
             Id = 'Network.Diagnostics'
             Name = 'Network Diagnostics'
-            Category = 'Network'
+            Category = 'Network Tools'
             Description = 'Collects network health diagnostics, DNS status, and adapter details.'
             RequiresAdmin = $false
             Handler = {
@@ -242,7 +385,7 @@ function Get-ToolkitTaskCatalog {
         [pscustomobject]@{
             Id = 'Network.ResetStack'
             Name = 'Reset Network Stack'
-            Category = 'Network'
+            Category = 'Network Tools'
             Description = 'Resets Winsock and TCP/IP stack for troubleshooting persistent network failures.'
             RequiresAdmin = $true
             Handler = {
@@ -276,7 +419,7 @@ function Get-ToolkitTaskCatalog {
         [pscustomobject]@{
             Id = 'Disk.Monitor'
             Name = 'Disk Space Monitor'
-            Category = 'Storage'
+            Category = 'Storage / Setup'
             Description = 'Reports free space for local drives and flags low-space disks.'
             RequiresAdmin = $false
             Handler = {
@@ -287,7 +430,7 @@ function Get-ToolkitTaskCatalog {
         [pscustomobject]@{
             Id = 'Update.AllApps'
             Name = 'Update All Installed Apps'
-            Category = 'Updates'
+            Category = 'Update Tools'
             Description = 'Runs winget upgrade for all supported packages.'
             RequiresAdmin = $true
             Handler = {
@@ -314,7 +457,14 @@ function Get-ToolkitTaskCatalog {
             RequiresAdmin = $false
             Handler = {
                 param($Context, $Task)
-                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DebloatInventory.ps1' -StepName 'Debloat and uninstall helper'
+                $extraArguments = ''
+                if ($Context.PSObject.Properties.Name -contains 'UserInput') {
+                    $selectionFile = $Context.UserInput.SelectionFile
+                    if ($selectionFile) {
+                        $extraArguments = "-SelectionFile `"$selectionFile`""
+                    }
+                }
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DebloatInventory.ps1' -StepName 'Debloat and uninstall helper' -AdditionalArguments $extraArguments
             }
         },
         [pscustomobject]@{
@@ -360,6 +510,7 @@ function Get-ToolkitTaskCatalog {
 
 Export-ModuleMember -Function @(
     'Get-ToolkitRoot',
+    'Get-ToolkitCategoryOrder',
     'Get-ToolkitSettings',
     'Test-ToolkitIsAdmin',
     'Write-ToolkitLog',

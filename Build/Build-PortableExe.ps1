@@ -16,6 +16,8 @@ if (-not $distRoot) {
 $portableRoot = Join-Path $distRoot.Path 'portable'
 $appRoot = Join-Path $portableRoot $AppName
 $exePath = Join-Path $appRoot "$AppName.exe"
+$rootExePath = Join-Path $projectRoot "$AppName.exe"
+$fallbackRootExePath = Join-Path $projectRoot "$AppName (updated).exe"
 $zipPath = Join-Path $distRoot.Path "$AppName-portable.zip"
 
 Write-Host "Project root: $projectRoot"
@@ -61,6 +63,16 @@ if (-not (Test-Path $launcherPs1)) {
 Write-Host 'Compiling launcher to EXE...'
 ps2exe -inputFile $launcherPs1 -outputFile $exePath -noConsole -title "T3CHNRD'S Windows Tool Kit" -version '1.0.0.0'
 
+try {
+    Copy-Item -LiteralPath $exePath -Destination $rootExePath -Force
+    Write-Host "Root EXE updated: $rootExePath"
+}
+catch {
+    Write-Warning "Could not overwrite the root EXE. It is likely still open: $rootExePath"
+    Copy-Item -LiteralPath $exePath -Destination $fallbackRootExePath -Force
+    Write-Host "Updated EXE copied instead to: $fallbackRootExePath"
+}
+
 if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
@@ -70,4 +82,8 @@ Write-Host ''
 Write-Host "Build complete."
 Write-Host "Portable folder: $appRoot"
 Write-Host "Portable EXE: $exePath"
+Write-Host "Root EXE: $rootExePath"
+if (Test-Path -LiteralPath $fallbackRootExePath) {
+    Write-Host "Fallback root EXE: $fallbackRootExePath"
+}
 Write-Host "Portable ZIP: $zipPath"
