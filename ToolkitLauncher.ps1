@@ -76,7 +76,9 @@ $leftPanel.Controls.Add($taskList)
 foreach ($task in $tasks) {
     $item = New-Object System.Windows.Forms.ListViewItem($task.Name)
     [void]$item.SubItems.Add($task.Category)
-    [void]$item.SubItems.Add((if ($task.RequiresAdmin) { 'Yes' } else { 'No' }))
+    $adminText = 'No'
+    if ($task.RequiresAdmin) { $adminText = 'Yes' }
+    [void]$item.SubItems.Add($adminText)
     [void]$item.SubItems.Add($task.Id)
     [void]$taskList.Items.Add($item)
 }
@@ -194,7 +196,9 @@ $taskList.add_SelectedIndexChanged({
     }
 
     $descriptionBox.Text = $selectedTask.Description
-    $requiresAdminLabel.Text = "Requires Admin: " + (if ($selectedTask.RequiresAdmin) { 'Yes' } else { 'No' })
+    $selectedAdminText = 'No'
+    if ($selectedTask.RequiresAdmin) { $selectedAdminText = 'Yes' }
+    $requiresAdminLabel.Text = "Requires Admin: $selectedAdminText"
 })
 
 $openLogsButton.Add_Click({

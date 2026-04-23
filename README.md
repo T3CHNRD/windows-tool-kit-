@@ -41,16 +41,12 @@ T3CHNRD'S Windows Tool Kit/
 ## Quick Start
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-cd "C:\Users\tvedders\Documents\T3CHNRD'S Windows Tool Kit"
+cd "<project-root>"
 .\ToolkitLauncher.ps1
 ```
 
 ## Build Outputs
 ### Portable EXE (USB recommended)
-```powershell
-cd "C:\Users\tvedders\Documents\T3CHNRD'S Windows Tool Kit\Build"
-.\Build-PortableExe.ps1
-```
 Outputs:
 - `dist\portable\T3CHNRD'S Windows Tool Kit\T3CHNRD'S Windows Tool Kit.exe`
 - `dist\T3CHNRD'S Windows Tool Kit-portable.zip`
@@ -58,7 +54,7 @@ Outputs:
 ### MSI (optional)
 Requires WiX Toolset v3.11.
 ```powershell
-cd "C:\Users\tvedders\Documents\T3CHNRD'S Windows Tool Kit\Build"
+cd "<project-root>\Build"
 .\Build-Msi.ps1
 ```
 Output:

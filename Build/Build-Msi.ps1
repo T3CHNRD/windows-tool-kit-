@@ -40,14 +40,21 @@ if (-not (Test-Path $objDir)) { New-Item -Path $objDir -ItemType Directory -Forc
 function Get-WixToolPath {
     param([Parameter(Mandatory = $true)][string]$ToolName)
 
-    $candidates = @(
-        (Join-Path $env:WIX "$ToolName.exe"),
-        (Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin\$ToolName.exe"),
-        (Join-Path $env:ProgramFiles "WiX Toolset v3.11\bin\$ToolName.exe")
-    ) | Where-Object { $_ -and (Test-Path $_) }
+    $candidates = @()
+    if ($env:WIX) {
+        $candidates += (Join-Path $env:WIX "$ToolName.exe")
+    }
+    if (${env:ProgramFiles(x86)}) {
+        $candidates += (Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin\$ToolName.exe")
+    }
+    if ($env:ProgramFiles) {
+        $candidates += (Join-Path $env:ProgramFiles "WiX Toolset v3.11\bin\$ToolName.exe")
+    }
 
-    if ($candidates.Count -gt 0) {
-        return $candidates[0]
+    $candidates = @($candidates | Where-Object { $_ -and (Test-Path $_) })
+
+    if (@($candidates).Count -gt 0) {
+        return @($candidates)[0]
     }
 
     $cmd = Get-Command "$ToolName.exe" -ErrorAction SilentlyContinue
