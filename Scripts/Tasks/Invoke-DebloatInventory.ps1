@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$toolkitRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+$toolkitRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $logDir = Join-Path $toolkitRoot 'Logs'
 if (-not (Test-Path $logDir)) {
     New-Item -Path $logDir -ItemType Directory -Force | Out-Null
@@ -26,7 +26,7 @@ Get-AppxPackage | Select-Object Name, PackageFullName, Publisher, Version |
 
 if ($SelectionFile -and (Test-Path $SelectionFile)) {
     Write-Output 'Loading selected app review list...'
-    $selectedApps = Get-Content -LiteralPath $SelectionFile | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $selectedApps = @(Get-Content -LiteralPath $SelectionFile | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($selectedApps.Count -gt 0) {
         "Selected apps for review:" | Out-File -FilePath $selectedOut -Encoding utf8
         $selectedApps | Sort-Object -Unique | Out-File -FilePath $selectedOut -Encoding utf8 -Append
@@ -38,7 +38,12 @@ if ($SelectionFile -and (Test-Path $SelectionFile)) {
 }
 
 Write-Output 'Opening Apps & Features for safe uninstall review...'
-Start-Process 'ms-settings:appsfeatures'
+try {
+    Start-Process 'ms-settings:appsfeatures' -ErrorAction Stop
+}
+catch {
+    Write-Output "Could not open Apps & Features automatically: $($_.Exception.Message)"
+}
 
 Write-Output "Debloat inventory complete. Reports:"
 Write-Output $wingetOut

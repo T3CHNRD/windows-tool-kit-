@@ -1,8 +1,8 @@
 # Logs
-Logs/*.log
+Logs/*
+!Logs/.gitkeep
 
 # Temporary exports
-Logs/*.csv
 *.tmp
 *.zip
 

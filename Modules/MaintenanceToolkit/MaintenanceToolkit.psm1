@@ -1,6 +1,16 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$updateToolsModule = Join-Path (Join-Path $PSScriptRoot '..') 'UpdateTools\UpdateTools.psm1'
+$storageToolsModule = Join-Path (Join-Path $PSScriptRoot '..') 'StorageTools\StorageTools.psm1'
+$hardwareDiagnosticsModule = Join-Path (Join-Path $PSScriptRoot '..') 'HardwareDiagnostics\HardwareDiagnostics.psm1'
+
+foreach ($moduleToImport in @($updateToolsModule, $storageToolsModule, $hardwareDiagnosticsModule)) {
+    if (Test-Path -LiteralPath $moduleToImport) {
+        Import-Module $moduleToImport -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+}
+
 function Resolve-ToolkitPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path
@@ -180,6 +190,7 @@ function Get-ToolkitCategoryOrder {
         'Applications',
         'Cleanup',
         'Deployment',
+        'Hardware Diagnostics',
         'Misc/Utility',
         'Network Tools',
         'OneNote & Documents',
@@ -372,6 +383,38 @@ function Get-LegacyScriptTasks {
 function Get-ToolkitTaskCatalog {
     $coreTasks = @(
         [pscustomobject]@{
+            Id = 'Hardware.MouseKeyboardTest'
+            Name = 'Mouse & Keyboard Test'
+            Category = 'Hardware Diagnostics'
+            Description = 'Opens an activity test window that detects mouse movement, clicks, and keyboard input.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-TaskStep -Context $Context -Percent 10 -Status 'Opening mouse and keyboard test' -LogMessage 'Launching mouse and keyboard diagnostic window.'
+                $result = Test-TtkMouseKeyboardActivity
+                if ($result) {
+                    & $Context.WriteLog $result 'INFO'
+                }
+                Invoke-TaskStep -Context $Context -Percent 100 -Status 'Mouse and keyboard test complete' -LogMessage 'Mouse and keyboard diagnostic window closed.'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Hardware.MonitorPixelTest'
+            Name = 'Monitor Dead Pixel Test'
+            Category = 'Hardware Diagnostics'
+            Description = 'Launches a full-screen color cycling tool for dead-pixel and stuck-pixel inspection. Press ESC to exit.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-TaskStep -Context $Context -Percent 10 -Status 'Opening monitor pixel test' -LogMessage 'Launching monitor dead-pixel tester.'
+                $result = Start-TtkMonitorPixelTest
+                if ($result) {
+                    & $Context.WriteLog $result 'INFO'
+                }
+                Invoke-TaskStep -Context $Context -Percent 100 -Status 'Monitor pixel test complete' -LogMessage 'Monitor dead-pixel tester closed.'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Network.Diagnostics'
             Name = 'Network Diagnostics'
             Category = 'Network Tools'
@@ -428,6 +471,36 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Storage.CloneGuide'
+            Name = 'Clone Disk Guide'
+            Category = 'Storage / Setup'
+            Description = 'Shows the guided disk-cloning checklist and safety steps before running an imaging workflow.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-TaskStep -Context $Context -Percent 20 -Status 'Preparing clone disk guidance' -LogMessage 'Opening clone disk guidance.'
+                foreach ($line in (Invoke-TtkCloneDiskGuide)) {
+                    & $Context.WriteLog $line 'INFO'
+                }
+                Invoke-TaskStep -Context $Context -Percent 100 -Status 'Clone disk guidance complete' -LogMessage 'Clone disk guidance displayed in the log.'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Storage.NewComputerSetup'
+            Name = 'New Computer Setup Checklist'
+            Category = 'Storage / Setup'
+            Description = 'Writes the standard new-computer setup checklist to the execution log for guided deployment work.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-TaskStep -Context $Context -Percent 20 -Status 'Preparing new computer setup checklist' -LogMessage 'Opening new computer setup checklist.'
+                foreach ($line in (Invoke-TtkNewComputerSetupChecklist)) {
+                    & $Context.WriteLog $line 'INFO'
+                }
+                Invoke-TaskStep -Context $Context -Percent 100 -Status 'New computer setup checklist complete' -LogMessage 'New computer setup checklist written to the log.'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Update.AllApps'
             Name = 'Update All Installed Apps'
             Category = 'Update Tools'
@@ -436,6 +509,57 @@ function Get-ToolkitTaskCatalog {
             Handler = {
                 param($Context, $Task)
                 Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-UpdateAllApps.ps1' -StepName 'Update all installed apps'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Update.VendorBIOS'
+            Name = 'BIOS Update Tool'
+            Category = 'Update Tools'
+            Description = 'Vendor BIOS updater for Dell, HP, and Lenovo systems only. Uses vendor-supported update tooling and blocks unsupported manufacturers.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-BiosUpdate.ps1' -StepName 'Vendor BIOS update'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Update.VendorFirmware'
+            Name = 'Firmware Update Tool'
+            Category = 'Update Tools'
+            Description = 'Vendor firmware updater for Dell, HP, and Lenovo systems only. Uses vendor-supported update tooling and blocks unsupported manufacturers.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-FirmwareUpdate.ps1' -StepName 'Vendor firmware update'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Update.VendorDrivers'
+            Name = 'Driver Update Tool'
+            Category = 'Update Tools'
+            Description = 'Vendor driver updater for Dell, HP, and Lenovo systems only. Uses vendor-supported update tooling and blocks unsupported manufacturers.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DriverUpdate.ps1' -StepName 'Vendor driver update'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Update.WindowsOS'
+            Name = 'Windows Update Tool'
+            Category = 'Update Tools'
+            Description = 'Scans, downloads, and installs Windows updates. Supports skip-file based exclusions for updates you do not want installed.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                $extraArguments = ''
+                if ($Context.PSObject.Properties.Name -contains 'UserInput') {
+                    $selectionFile = $Context.UserInput.SelectionFile
+                    if ($selectionFile) {
+                        $extraArguments = "-SkipSelectionFile `"$selectionFile`""
+                    }
+                }
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-WindowsUpdateTool.ps1' -StepName 'Windows Update tool' -AdditionalArguments $extraArguments
             }
         },
         [pscustomobject]@{

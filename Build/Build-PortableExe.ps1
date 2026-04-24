@@ -1,11 +1,15 @@
 [CmdletBinding()]
 param(
-    [string]$OutputRoot = (Join-Path $PSScriptRoot '..\dist'),
+    [string]$OutputRoot,
     [string]$AppName = "T3CHNRD'S Windows Tool Kit"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if (-not $OutputRoot) {
+    $OutputRoot = Join-Path $PSScriptRoot '..\dist'
+}
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $distRoot = (Resolve-Path $OutputRoot -ErrorAction SilentlyContinue)

@@ -13,12 +13,24 @@ foreach ($target in $targets) {
     }
 
     Write-Output "Cleaning: $target"
-    Get-ChildItem -Path $target -Force -ErrorAction SilentlyContinue | ForEach-Object {
+    foreach ($item in @(Get-ChildItem -Path $target -Force -ErrorAction SilentlyContinue)) {
+        $itemPath = $null
+        if ($item -and $item.PSObject.Properties['FullName']) {
+            $itemPath = [string]$item.FullName
+        }
+        elseif ($item) {
+            $itemPath = [string]$item
+        }
+
+        if ([string]::IsNullOrWhiteSpace($itemPath)) {
+            continue
+        }
+
         try {
-            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $itemPath -Recurse -Force -ErrorAction Stop
         }
         catch {
-            Write-Output "Could not remove: $($_.FullName) - $($_.Exception.Message)"
+            Write-Output "Could not remove: $itemPath - $($_.Exception.Message)"
         }
     }
 }
