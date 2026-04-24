@@ -90,6 +90,10 @@ if (-not (Test-LauncherIsAdmin)) {
 
 $modulePath = Join-Path $toolkitRoot 'Modules\MaintenanceToolkit\MaintenanceToolkit.psm1'
 Import-Module $modulePath -Force
+$hardwareModulePath = Join-Path $toolkitRoot 'Modules\HardwareDiagnostics\HardwareDiagnostics.psm1'
+if (Test-Path -LiteralPath $hardwareModulePath) {
+    Import-Module $hardwareModulePath -Force
+}
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
@@ -126,19 +130,42 @@ $toolTip.InitialDelay = 300
 $toolTip.ReshowDelay = 150
 $toolTip.ShowAlways = $true
 
+$menuStrip = New-Object System.Windows.Forms.MenuStrip
+$menuStrip.Dock = 'Fill'
+$menuStrip.BackColor = [System.Drawing.Color]::White
+
+$fileMenu = New-Object System.Windows.Forms.ToolStripMenuItem('&File')
+$importScriptMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Import Script...')
+$openLogsMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Open Logs Folder')
+$exitMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Exit')
+[void]$fileMenu.DropDownItems.Add($importScriptMenuItem)
+[void]$fileMenu.DropDownItems.Add($openLogsMenuItem)
+[void]$fileMenu.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+[void]$fileMenu.DropDownItems.Add($exitMenuItem)
+
+$editMenu = New-Object System.Windows.Forms.ToolStripMenuItem('&Edit')
+$editScriptMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Edit Selected Script...')
+[void]$editMenu.DropDownItems.Add($editScriptMenuItem)
+
+[void]$menuStrip.Items.Add($fileMenu)
+[void]$menuStrip.Items.Add($editMenu)
+$form.MainMenuStrip = $menuStrip
+
 $rootLayout = New-Object System.Windows.Forms.TableLayoutPanel
 $rootLayout.Dock = 'Fill'
 $rootLayout.ColumnCount = 1
-$rootLayout.RowCount = 2
+$rootLayout.RowCount = 3
+[void]$rootLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
 [void]$rootLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 108)))
 [void]$rootLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 [void]$form.Controls.Add($rootLayout)
+[void]$rootLayout.Controls.Add($menuStrip, 0, 0)
 
 $headerPanel = New-Object System.Windows.Forms.Panel
 $headerPanel.Dock = 'Fill'
 $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(26, 45, 78)
 $headerPanel.Padding = New-Object System.Windows.Forms.Padding(24, 16, 24, 16)
-[void]$rootLayout.Controls.Add($headerPanel, 0, 0)
+[void]$rootLayout.Controls.Add($headerPanel, 0, 1)
 
 $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Text = "T3CHNRD'S Windows Tool Kit"
@@ -160,7 +187,7 @@ $contentSplit = New-Object System.Windows.Forms.SplitContainer
 $contentSplit.Dock = 'Fill'
 $contentSplit.BackColor = [System.Drawing.Color]::FromArgb(232, 237, 245)
 $contentSplit.FixedPanel = 'Panel1'
-[void]$rootLayout.Controls.Add($contentSplit, 0, 1)
+[void]$rootLayout.Controls.Add($contentSplit, 0, 2)
 
 $leftLayout = New-Object System.Windows.Forms.TableLayoutPanel
 $leftLayout.Dock = 'Fill'
@@ -281,25 +308,11 @@ $chooseAppsButton.Visible = $false
 $toolTip.SetToolTip($chooseAppsButton, 'Choose applications to include in the debloat review list.')
 [void]$buttonPanel.Controls.Add($chooseAppsButton)
 
-$importScriptButton = New-Object System.Windows.Forms.Button
-$importScriptButton.Text = 'Import Script'
-$importScriptButton.Size = New-Object System.Drawing.Size(126, 38)
-$importScriptButton.FlatStyle = 'Flat'
-$toolTip.SetToolTip($importScriptButton, 'Imports another PowerShell script into the toolkit so it can be managed later.')
-[void]$buttonPanel.Controls.Add($importScriptButton)
-
 $openLogsButton = New-Object System.Windows.Forms.Button
 $openLogsButton.Text = 'Open Logs Folder'
 $openLogsButton.Size = New-Object System.Drawing.Size(150, 38)
 $openLogsButton.FlatStyle = 'Flat'
 [void]$buttonPanel.Controls.Add($openLogsButton)
-
-$openRootButton = New-Object System.Windows.Forms.Button
-$openRootButton.Text = 'View/Edit Script'
-$openRootButton.Size = New-Object System.Drawing.Size(150, 38)
-$openRootButton.FlatStyle = 'Flat'
-[void]$toolTip.SetToolTip($openRootButton, 'Opens the selected tool script inside the toolkit editor.')
-[void]$buttonPanel.Controls.Add($openRootButton)
 
 $logTitle = New-Object System.Windows.Forms.Label
 $logTitle.Text = 'Execution Log'
@@ -555,6 +568,80 @@ function Show-ScriptEditor {
     })
 
     [void]$editorForm.ShowDialog($form)
+}
+
+function Open-ToolkitLogsFolder {
+    $settings = Get-ToolkitSettings
+    $logPath = Join-Path (Get-ToolkitRoot) $settings.LogRoot
+    if (-not (Test-Path -LiteralPath $logPath)) {
+        New-Item -Path $logPath -ItemType Directory -Force | Out-Null
+    }
+    Start-Process explorer.exe $logPath
+}
+
+function Import-ScriptIntoToolkit {
+    if (Test-TaskIsRunning) {
+        [System.Windows.Forms.MessageBox]::Show(
+            'Wait for the current task to finish before importing another script.',
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Filter = 'PowerShell scripts (*.ps1)|*.ps1|All files (*.*)|*.*'
+    $dialog.Multiselect = $false
+    $dialog.Title = 'Import PowerShell Script Into Toolkit'
+
+    if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) {
+        return
+    }
+
+    $destinationDir = Join-Path $toolkitRoot 'LegacyScripts'
+    if (-not (Test-Path -LiteralPath $destinationDir)) {
+        New-Item -Path $destinationDir -ItemType Directory -Force | Out-Null
+    }
+
+    $destinationPath = Join-Path $destinationDir ([IO.Path]::GetFileName($dialog.FileName))
+    if ((Test-Path -LiteralPath $destinationPath) -and ((Resolve-Path -LiteralPath $dialog.FileName).Path -ne (Resolve-Path -LiteralPath $destinationPath).Path)) {
+        $overwrite = [System.Windows.Forms.MessageBox]::Show(
+            "A script with this name already exists in the toolkit.`r`n`r`nOverwrite it?",
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
+        )
+
+        if ($overwrite -ne [System.Windows.Forms.DialogResult]::Yes) {
+            return
+        }
+    }
+
+    Copy-Item -LiteralPath $dialog.FileName -Destination $destinationPath -Force
+    Add-UiLogLine -Line "Imported script into toolkit: $destinationPath"
+    Refresh-TaskTabs
+    [System.Windows.Forms.MessageBox]::Show(
+        "Imported script:`r`n$destinationPath",
+        'Toolkit',
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    ) | Out-Null
+}
+
+function Edit-SelectedScript {
+    $selectedTask = Get-SelectedTaskFromActiveTab
+    if (-not $selectedTask) {
+        [System.Windows.Forms.MessageBox]::Show(
+            'Select a tool first, then open its script in the editor.',
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    Show-ScriptEditor -Task $selectedTask
 }
 
 function Refresh-TaskTabs {
@@ -1204,12 +1291,66 @@ function Set-InteractiveState {
     $tabControl.Enabled = $Enabled
     $runButton.Enabled = $Enabled
     $chooseAppsButton.Enabled = $Enabled
-    $importScriptButton.Enabled = $Enabled
     $openLogsButton.Enabled = $Enabled
-    $openRootButton.Enabled = $Enabled
+    $importScriptMenuItem.Enabled = $Enabled
+    $editScriptMenuItem.Enabled = $Enabled
+    $openLogsMenuItem.Enabled = $Enabled
     $cancelButton.Enabled = (-not $Enabled)
     foreach ($category in $script:TaskListsByCategory.Keys) {
         $script:TaskListsByCategory[$category].Enabled = $Enabled
+    }
+}
+
+function Start-InteractiveHardwareTool {
+    param(
+        [Parameter(Mandatory = $true)]$Task
+    )
+
+    $progressBar.Style = 'Continuous'
+    $progressBar.Value = 10
+    $statusLabel.Text = "Status: Opening $($Task.Name)..."
+    Add-UiLogLine -Line "Opening interactive hardware tool: $($Task.Name)"
+    Set-InteractiveState -Enabled $false
+
+    try {
+        if ($Task.Id -eq 'Hardware.MouseKeyboardTest') {
+            $progressBar.Value = 25
+            $result = Test-TtkMouseKeyboardActivity
+        }
+        elseif ($Task.Id -eq 'Hardware.MonitorPixelTest') {
+            $progressBar.Value = 25
+            $result = Start-TtkMonitorPixelTest
+        }
+        else {
+            throw "Unsupported interactive hardware tool: $($Task.Id)"
+        }
+
+        if ($result) {
+            Add-UiLogLine -Line ([string]$result)
+        }
+        $progressBar.Value = 100
+        $statusLabel.Text = "Status: Completed - $($Task.Name)"
+        Add-UiLogLine -Line "Interactive hardware tool closed: $($Task.Name)"
+        [System.Windows.Forms.MessageBox]::Show(
+            "Task completed: $($Task.Name)",
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+    }
+    catch {
+        $progressBar.Value = 0
+        $statusLabel.Text = "Status: Failed - $($_.Exception.Message)"
+        Add-UiLogLine -Line "Interactive hardware tool failed: $($_.Exception.Message)"
+        [System.Windows.Forms.MessageBox]::Show(
+            "Task failed: $($_.Exception.Message)",
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+    }
+    finally {
+        Set-InteractiveState -Enabled $true
     }
 }
 
@@ -1225,6 +1366,11 @@ function Start-ToolkitTask {
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information
         ) | Out-Null
+        return
+    }
+
+    if ($Task.Id -in @('Hardware.MouseKeyboardTest', 'Hardware.MonitorPixelTest')) {
+        Start-InteractiveHardwareTool -Task $Task
         return
     }
 
@@ -1377,79 +1523,14 @@ $chooseAppsButton.Add_Click({
     }
 })
 
-$importScriptButton.Add_Click({
-    if (Test-TaskIsRunning) {
-        [System.Windows.Forms.MessageBox]::Show(
-            'Wait for the current task to finish before importing another script.',
-            'Toolkit',
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        ) | Out-Null
-        return
-    }
-
-    $dialog = New-Object System.Windows.Forms.OpenFileDialog
-    $dialog.Filter = 'PowerShell scripts (*.ps1)|*.ps1|All files (*.*)|*.*'
-    $dialog.Multiselect = $false
-    $dialog.Title = 'Import PowerShell Script Into Toolkit'
-
-    if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) {
-        return
-    }
-
-    $destinationDir = Join-Path $toolkitRoot 'LegacyScripts'
-    if (-not (Test-Path -LiteralPath $destinationDir)) {
-        New-Item -Path $destinationDir -ItemType Directory -Force | Out-Null
-    }
-
-    $destinationPath = Join-Path $destinationDir ([IO.Path]::GetFileName($dialog.FileName))
-    if ((Test-Path -LiteralPath $destinationPath) -and ((Resolve-Path -LiteralPath $dialog.FileName).Path -ne (Resolve-Path -LiteralPath $destinationPath).Path)) {
-        $overwrite = [System.Windows.Forms.MessageBox]::Show(
-            "A script with this name already exists in the toolkit.`r`n`r`nOverwrite it?",
-            'Toolkit',
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
-
-        if ($overwrite -ne [System.Windows.Forms.DialogResult]::Yes) {
-            return
-        }
-    }
-
-    Copy-Item -LiteralPath $dialog.FileName -Destination $destinationPath -Force
-    Add-UiLogLine -Line "Imported script into toolkit: $destinationPath"
-    Refresh-TaskTabs
-    [System.Windows.Forms.MessageBox]::Show(
-        "Imported script:`r`n$destinationPath",
-        'Toolkit',
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    ) | Out-Null
-})
-
 $openLogsButton.Add_Click({
-    $settings = Get-ToolkitSettings
-    $logPath = Join-Path (Get-ToolkitRoot) $settings.LogRoot
-    if (-not (Test-Path -LiteralPath $logPath)) {
-        New-Item -Path $logPath -ItemType Directory -Force | Out-Null
-    }
-    Start-Process explorer.exe $logPath
+    Open-ToolkitLogsFolder
 })
 
-$openRootButton.Add_Click({
-    $selectedTask = Get-SelectedTaskFromActiveTab
-    if (-not $selectedTask) {
-        [System.Windows.Forms.MessageBox]::Show(
-            'Select a tool first, then open its script in the editor.',
-            'Toolkit',
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        ) | Out-Null
-        return
-    }
-
-    Show-ScriptEditor -Task $selectedTask
-})
+$importScriptMenuItem.Add_Click({ Import-ScriptIntoToolkit })
+$openLogsMenuItem.Add_Click({ Open-ToolkitLogsFolder })
+$exitMenuItem.Add_Click({ $form.Close() })
+$editScriptMenuItem.Add_Click({ Edit-SelectedScript })
 
 $tabControl.Add_SelectedIndexChanged({
     Select-FirstTaskInTab

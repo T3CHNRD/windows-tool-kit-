@@ -48,7 +48,7 @@ function Test-ToolkitIsAdmin {
 
 function Write-ToolkitLog {
     param(
-        [Parameter(Mandatory = $true)][string]$Message,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Message,
         [ValidateSet('INFO', 'WARN', 'ERROR')][string]$Level = 'INFO'
     )
 
@@ -363,6 +363,9 @@ function Get-LegacyScriptTasks {
                 $output = Receive-Job -Job $job -Keep -ErrorAction SilentlyContinue
                 if ($output) {
                     foreach ($line in $output) {
+                        if ([string]::IsNullOrWhiteSpace([string]$line)) {
+                            continue
+                        }
                         & $Context.WriteLog "$line" 'INFO'
                     }
                 }
@@ -604,9 +607,9 @@ function Get-ToolkitTaskCatalog {
                     throw "Missing integration script: $scriptPath"
                 }
 
-                Invoke-TaskStep -Context $Context -Percent 10 -Status 'Preparing Microsoft 365 workflow' -LogMessage 'Launching Install-Microsoft365 integration script.'
-                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath
-                Invoke-TaskStep -Context $Context -Percent 100 -Status 'Microsoft 365 integration complete' -LogMessage 'Install-Microsoft365 workflow finished.'
+                Invoke-TaskStep -Context $Context -Percent 5 -Status 'Preparing Microsoft 365 workflow' -LogMessage 'Preparing mallockey/Install-Microsoft365 download and launch workflow.'
+                Invoke-TaskStep -Context $Context -Percent 15 -Status 'Downloading Microsoft 365 installer workflow' -LogMessage 'The integration script will download https://github.com/mallockey/Install-Microsoft365/archive/refs/heads/main.zip and locate the installer entry point.'
+                Invoke-ToolkitCommand -Context $Context -FilePath 'powershell.exe' -Arguments "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -StepName 'mallockey Install-Microsoft365 workflow' -StartPercent 20 -EndPercent 100 -RequireSuccessExitCode
             }
         },
         [pscustomobject]@{
@@ -640,5 +643,8 @@ Export-ModuleMember -Function @(
     'Write-ToolkitLog',
     'New-ToolkitTaskContext',
     'Get-ToolkitTaskCatalog',
-    'Invoke-ToolkitTaskById'
+    'Invoke-ToolkitTaskById',
+    'Invoke-TaskStep',
+    'Invoke-ToolkitCommand',
+    'Invoke-ToolkitScriptTask'
 )

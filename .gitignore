@@ -5,6 +5,7 @@ Logs/*
 # Temporary exports
 *.tmp
 *.zip
+Integrations/Install-Microsoft365/
 
 # PowerShell module cache
 *.psm1.bak

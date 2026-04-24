@@ -14,12 +14,15 @@ $zipPath = Join-Path $env:TEMP ("Install-Microsoft365-{0}.zip" -f (Get-Date -For
 
 Write-Host "Downloading Install-Microsoft365 from $downloadUrl"
 Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
+Write-Host "Downloaded workflow archive to $zipPath"
 
 if (Test-Path $targetRoot) {
+    Write-Host "Removing previous workflow copy from $targetRoot"
     Remove-Item -Path $targetRoot -Recurse -Force
 }
 New-Item -Path $targetRoot -ItemType Directory -Force | Out-Null
 
+Write-Host "Extracting Install-Microsoft365 workflow to $targetRoot"
 Expand-Archive -Path $zipPath -DestinationPath $targetRoot -Force
 Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
 
@@ -33,4 +36,14 @@ if (-not $candidateScript) {
 
 Write-Host "Launching installer script: $($candidateScript.FullName)"
 Write-Host 'Follow the script prompts to choose Microsoft 365 install options.'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $candidateScript.FullName
+$arguments = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', ('"{0}"' -f $candidateScript.FullName)
+) -join ' '
+
+$process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Wait -PassThru
+Write-Host "Install-Microsoft365 workflow process exited with code $($process.ExitCode)."
+if ($process.ExitCode -ne 0) {
+    throw "Install-Microsoft365 workflow exited with code $($process.ExitCode)."
+}
