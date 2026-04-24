@@ -93,12 +93,9 @@ Import-Module $modulePath -Force
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-$tasks = @(Get-ToolkitTaskCatalog | Sort-Object Category, Name)
-$categoryOrder = @(Get-ToolkitCategoryOrder | Where-Object { $tasks.Category -contains $_ })
-$tasksByCategory = @{}
-foreach ($category in $categoryOrder) {
-    $tasksByCategory[$category] = @($tasks | Where-Object { $_.Category -eq $category })
-}
+$script:Tasks = @()
+$script:CategoryOrder = @()
+$script:TasksByCategory = @{}
 
 $script:SelectedTask = $null
 $script:DebloatSelections = @()
@@ -284,6 +281,13 @@ $chooseAppsButton.Visible = $false
 $toolTip.SetToolTip($chooseAppsButton, 'Choose applications to include in the debloat review list.')
 [void]$buttonPanel.Controls.Add($chooseAppsButton)
 
+$importScriptButton = New-Object System.Windows.Forms.Button
+$importScriptButton.Text = 'Import Script'
+$importScriptButton.Size = New-Object System.Drawing.Size(126, 38)
+$importScriptButton.FlatStyle = 'Flat'
+$toolTip.SetToolTip($importScriptButton, 'Imports another PowerShell script into the toolkit so it can be managed later.')
+[void]$buttonPanel.Controls.Add($importScriptButton)
+
 $openLogsButton = New-Object System.Windows.Forms.Button
 $openLogsButton.Text = 'Open Logs Folder'
 $openLogsButton.Size = New-Object System.Drawing.Size(150, 38)
@@ -291,10 +295,10 @@ $openLogsButton.FlatStyle = 'Flat'
 [void]$buttonPanel.Controls.Add($openLogsButton)
 
 $openRootButton = New-Object System.Windows.Forms.Button
-$openRootButton.Text = 'Open App Files'
+$openRootButton.Text = 'View/Edit Script'
 $openRootButton.Size = New-Object System.Drawing.Size(150, 38)
 $openRootButton.FlatStyle = 'Flat'
-[void]$toolTip.SetToolTip($openRootButton, 'Opens the app folder that contains this toolkit build and its scripts.')
+[void]$toolTip.SetToolTip($openRootButton, 'Opens the selected tool script inside the toolkit editor.')
 [void]$buttonPanel.Controls.Add($openRootButton)
 
 $logTitle = New-Object System.Windows.Forms.Label
@@ -373,6 +377,279 @@ function Get-CategoryTabLabel {
         default { $Category }
     }
 }
+
+function Refresh-TaskCatalogState {
+    $script:Tasks = @(Get-ToolkitTaskCatalog | Sort-Object Category, Name)
+    $script:CategoryOrder = @(Get-ToolkitCategoryOrder | Where-Object { $script:Tasks.Category -contains $_ })
+    $script:TasksByCategory = @{}
+
+    foreach ($category in $script:CategoryOrder) {
+        $script:TasksByCategory[$category] = @($script:Tasks | Where-Object { $_.Category -eq $category })
+    }
+}
+
+function Get-TaskSourcePath {
+    param(
+        [Parameter(Mandatory = $true)]$Task
+    )
+
+    if ($Task.Id -like 'Legacy.*') {
+        $scriptName = ($Task.Name -replace '^Legacy: ', '') + '.ps1'
+        return (Join-Path $toolkitRoot "LegacyScripts\$scriptName")
+    }
+
+    $map = @{
+        'Apps.DebloatHelper'            = 'Scripts\Tasks\Invoke-DebloatInventory.ps1'
+        'Cleanup.TempFiles'             = 'Scripts\Tasks\Invoke-ClearTempJunk.ps1'
+        'Cleanup.FreeSpace'             = 'Scripts\Tasks\Invoke-FreeCDriveSpace.ps1'
+        'Disk.Monitor'                  = 'Scripts\Tasks\Invoke-DiskSpaceMonitor.ps1'
+        'Integration.MediaCreationTool' = 'Integrations\Invoke-MediaCreationWorkflow.ps1'
+        'Integration.Microsoft365'      = 'Integrations\Invoke-InstallMicrosoft365.ps1'
+        'Network.Diagnostics'           = 'Scripts\Tasks\Invoke-NetworkMaintenance.ps1'
+        'Network.ResetStack'            = 'Scripts\Tasks\Invoke-ResetNetworkStack.ps1'
+        'Repair.WindowsHealth'          = 'Scripts\Tasks\Invoke-WindowsRepairChecks.ps1'
+        'Update.AllApps'                = 'Scripts\Tasks\Invoke-UpdateAllApps.ps1'
+        'Update.VendorBIOS'             = 'Scripts\Tasks\Invoke-BiosUpdate.ps1'
+        'Update.VendorDrivers'          = 'Scripts\Tasks\Invoke-DriverUpdate.ps1'
+        'Update.VendorFirmware'         = 'Scripts\Tasks\Invoke-FirmwareUpdate.ps1'
+        'Update.WindowsOS'              = 'Scripts\Tasks\Invoke-WindowsUpdateTool.ps1'
+        'Hardware.MouseKeyboardTest'    = 'Modules\HardwareDiagnostics\HardwareDiagnostics.psm1'
+        'Hardware.MonitorPixelTest'     = 'Modules\HardwareDiagnostics\HardwareDiagnostics.psm1'
+        'Storage.CloneGuide'            = 'Modules\StorageTools\StorageTools.psm1'
+        'Storage.NewComputerSetup'      = 'Modules\StorageTools\StorageTools.psm1'
+    }
+
+    if ($map.ContainsKey($Task.Id)) {
+        return (Join-Path $toolkitRoot $map[$Task.Id])
+    }
+
+    return $null
+}
+
+function Show-ScriptEditor {
+    param(
+        [Parameter(Mandatory = $true)]$Task
+    )
+
+    $sourcePath = Get-TaskSourcePath -Task $Task
+    if (-not $sourcePath -or -not (Test-Path -LiteralPath $sourcePath)) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "No editable source file is mapped for $($Task.Name) yet.",
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    $editorForm = New-Object System.Windows.Forms.Form
+    $editorForm.Text = "Edit Script - $($Task.Name)"
+    $editorForm.StartPosition = 'CenterParent'
+    $editorForm.Size = New-Object System.Drawing.Size(980, 760)
+    $editorForm.MinimumSize = New-Object System.Drawing.Size(760, 560)
+    $editorForm.Font = $form.Font
+
+    $editorLayout = New-Object System.Windows.Forms.TableLayoutPanel
+    $editorLayout.Dock = 'Fill'
+    $editorLayout.Padding = New-Object System.Windows.Forms.Padding(12)
+    $editorLayout.ColumnCount = 1
+    $editorLayout.RowCount = 4
+    [void]$editorLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$editorLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$editorLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+    [void]$editorLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$editorForm.Controls.Add($editorLayout)
+
+    $pathLabel = New-Object System.Windows.Forms.Label
+    $pathLabel.Text = $sourcePath
+    $pathLabel.AutoSize = $true
+    $pathLabel.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
+    [void]$editorLayout.Controls.Add($pathLabel, 0, 0)
+
+    $hintLabel = New-Object System.Windows.Forms.Label
+    $hintLabel.Text = 'Edit the script here and save changes directly back into the toolkit.'
+    $hintLabel.AutoSize = $true
+    $hintLabel.ForeColor = [System.Drawing.Color]::FromArgb(84, 96, 118)
+    $hintLabel.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
+    [void]$editorLayout.Controls.Add($hintLabel, 0, 1)
+
+    $scriptEditorBox = New-Object System.Windows.Forms.TextBox
+    $scriptEditorBox.Multiline = $true
+    $scriptEditorBox.AcceptsReturn = $true
+    $scriptEditorBox.AcceptsTab = $true
+    $scriptEditorBox.ScrollBars = 'Both'
+    $scriptEditorBox.WordWrap = $false
+    $scriptEditorBox.Dock = 'Fill'
+    $scriptEditorBox.Font = New-Object System.Drawing.Font('Consolas', 10)
+    $scriptEditorBox.Text = [IO.File]::ReadAllText($sourcePath)
+    [void]$editorLayout.Controls.Add($scriptEditorBox, 0, 2)
+
+    $editorButtons = New-Object System.Windows.Forms.FlowLayoutPanel
+    $editorButtons.Dock = 'Fill'
+    $editorButtons.FlowDirection = 'RightToLeft'
+    $editorButtons.WrapContents = $false
+    $editorButtons.Margin = New-Object System.Windows.Forms.Padding(0, 10, 0, 0)
+    [void]$editorLayout.Controls.Add($editorButtons, 0, 3)
+
+    $closeEditorButton = New-Object System.Windows.Forms.Button
+    $closeEditorButton.Text = 'Close'
+    $closeEditorButton.Size = New-Object System.Drawing.Size(120, 36)
+    [void]$editorButtons.Controls.Add($closeEditorButton)
+
+    $saveEditorButton = New-Object System.Windows.Forms.Button
+    $saveEditorButton.Text = 'Save'
+    $saveEditorButton.Size = New-Object System.Drawing.Size(120, 36)
+    [void]$editorButtons.Controls.Add($saveEditorButton)
+
+    $reloadEditorButton = New-Object System.Windows.Forms.Button
+    $reloadEditorButton.Text = 'Reload'
+    $reloadEditorButton.Size = New-Object System.Drawing.Size(120, 36)
+    [void]$editorButtons.Controls.Add($reloadEditorButton)
+
+    $openContainingFolderButton = New-Object System.Windows.Forms.Button
+    $openContainingFolderButton.Text = 'Open Folder'
+    $openContainingFolderButton.Size = New-Object System.Drawing.Size(120, 36)
+    [void]$editorButtons.Controls.Add($openContainingFolderButton)
+
+    $reloadEditorButton.Add_Click({
+        $scriptEditorBox.Text = [IO.File]::ReadAllText($sourcePath)
+    })
+
+    $openContainingFolderButton.Add_Click({
+        Start-Process explorer.exe "/select,`"$sourcePath`""
+    })
+
+    $saveEditorButton.Add_Click({
+        $tempSavePath = Join-Path $env:TEMP ("toolkit-parse-{0}.ps1" -f ([guid]::NewGuid().ToString('N')))
+        try {
+            Set-Content -LiteralPath $tempSavePath -Value $scriptEditorBox.Text -Encoding UTF8
+            $null = $parseErrors = $parseTokens = $parseAst = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($tempSavePath, [ref]$parseTokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+                $message = ($parseErrors | ForEach-Object { $_.Message } | Select-Object -First 5) -join [Environment]::NewLine
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Save blocked because the script has parse errors:`r`n`r`n$message",
+                    'Toolkit',
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                ) | Out-Null
+                return
+            }
+
+            Set-Content -LiteralPath $sourcePath -Value $scriptEditorBox.Text -Encoding UTF8
+            Add-UiLogLine -Line "Saved script changes: $sourcePath"
+            [System.Windows.Forms.MessageBox]::Show(
+                "Saved changes to:`r`n$sourcePath",
+                'Toolkit',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            ) | Out-Null
+        }
+        finally {
+            Remove-Item -LiteralPath $tempSavePath -Force -ErrorAction SilentlyContinue
+        }
+    })
+
+    $closeEditorButton.Add_Click({
+        $editorForm.Close()
+    })
+
+    [void]$editorForm.ShowDialog($form)
+}
+
+function Refresh-TaskTabs {
+    $selectedTaskId = if ($script:SelectedTask) { $script:SelectedTask.Id } else { $null }
+
+    Refresh-TaskCatalogState
+    $tabControl.TabPages.Clear()
+    $script:TaskListsByCategory = @{}
+
+    foreach ($category in $script:CategoryOrder) {
+        $tabPage = New-Object System.Windows.Forms.TabPage
+        $tabPage.Text = Get-CategoryTabLabel -Category $category
+        $tabPage.Tag = $category
+        $tabPage.BackColor = [System.Drawing.Color]::White
+        [void]$tabControl.TabPages.Add($tabPage)
+
+        $taskList = New-Object System.Windows.Forms.ListView
+        $taskList.Dock = 'Fill'
+        $taskList.View = 'Details'
+        $taskList.FullRowSelect = $true
+        $taskList.HideSelection = $false
+        $taskList.MultiSelect = $false
+        $taskList.ShowItemToolTips = $true
+        $taskList.GridLines = $true
+        $taskList.Activation = 'OneClick'
+        [void]$taskList.Columns.Add('Tool', 320)
+        [void]$taskList.Columns.Add('Admin', 70)
+        [void]$tabPage.Controls.Add($taskList)
+        $script:TaskListsByCategory[$category] = $taskList
+
+        foreach ($task in $script:TasksByCategory[$category]) {
+            $adminText = if ($task.RequiresAdmin) { 'Yes' } else { 'No' }
+            $item = New-Object System.Windows.Forms.ListViewItem($task.Name)
+            [void]$item.SubItems.Add($adminText)
+            $item.Tag = $task.Id
+            $item.ToolTipText = $task.Description
+            [void]$taskList.Items.Add($item)
+        }
+
+        $taskList.Add_SelectedIndexChanged({
+            $selectedTask = Get-SelectedTaskFromActiveTab
+            if ($selectedTask) {
+                Update-SelectedTaskDisplay -Task $selectedTask
+            }
+        })
+
+        $taskList.Add_DoubleClick({
+            $selectedTask = Get-SelectedTaskFromActiveTab
+            if ($selectedTask) {
+                Start-ToolkitTask -Task $selectedTask
+            }
+        })
+    }
+
+    if ($tabControl.TabPages.Count -eq 0) {
+        Update-SelectedTaskDisplay -Task $null
+        return
+    }
+
+    $selectedPageIndex = 0
+    if ($selectedTaskId) {
+        $taskToRestore = $script:Tasks | Where-Object { $_.Id -eq $selectedTaskId } | Select-Object -First 1
+        if ($taskToRestore) {
+            $selectedPage = $tabControl.TabPages | Where-Object { $_.Tag -eq $taskToRestore.Category } | Select-Object -First 1
+            if ($selectedPage) {
+                $selectedPageIndex = $tabControl.TabPages.IndexOf($selectedPage)
+            }
+        }
+    }
+
+    $tabControl.SelectedIndex = [Math]::Max(0, $selectedPageIndex)
+    Select-FirstTaskInTab
+
+    if ($selectedTaskId) {
+        foreach ($taskList in $script:TaskListsByCategory.Values) {
+            foreach ($item in $taskList.Items) {
+                if ($item.Tag -eq $selectedTaskId) {
+                    $item.Selected = $true
+                    $item.Focused = $true
+                    break
+                }
+            }
+        }
+    }
+
+    $selectedTask = Get-SelectedTaskFromActiveTab
+    if ($selectedTask) {
+        Update-SelectedTaskDisplay -Task $selectedTask
+    }
+    else {
+        Update-SelectedTaskDisplay -Task $null
+    }
+}
+
+Refresh-TaskCatalogState
 
 function Get-ToolkitLogDirectory {
     $settings = Get-ToolkitSettings
@@ -842,7 +1119,7 @@ function Get-SelectedTaskFromActiveTab {
     }
 
     $taskId = $taskList.SelectedItems[0].Tag
-    return ($tasks | Where-Object { $_.Id -eq $taskId } | Select-Object -First 1)
+    return ($script:Tasks | Where-Object { $_.Id -eq $taskId } | Select-Object -First 1)
 }
 
 function Update-SelectedTaskDisplay {
@@ -927,6 +1204,9 @@ function Set-InteractiveState {
     $tabControl.Enabled = $Enabled
     $runButton.Enabled = $Enabled
     $chooseAppsButton.Enabled = $Enabled
+    $importScriptButton.Enabled = $Enabled
+    $openLogsButton.Enabled = $Enabled
+    $openRootButton.Enabled = $Enabled
     $cancelButton.Enabled = (-not $Enabled)
     foreach ($category in $script:TaskListsByCategory.Keys) {
         $script:TaskListsByCategory[$category].Enabled = $Enabled
@@ -1020,50 +1300,7 @@ function Start-ToolkitTask {
     $taskMonitorTimer.Start()
 }
 
-foreach ($category in $categoryOrder) {
-    $tabPage = New-Object System.Windows.Forms.TabPage
-    $tabPage.Text = Get-CategoryTabLabel -Category $category
-    $tabPage.Tag = $category
-    $tabPage.BackColor = [System.Drawing.Color]::White
-    $tabControl.TabPages.Add($tabPage) | Out-Null
-
-    $taskList = New-Object System.Windows.Forms.ListView
-    $taskList.Dock = 'Fill'
-    $taskList.View = 'Details'
-    $taskList.FullRowSelect = $true
-    $taskList.HideSelection = $false
-    $taskList.MultiSelect = $false
-    $taskList.ShowItemToolTips = $true
-    $taskList.GridLines = $true
-    $taskList.Activation = 'OneClick'
-    [void]$taskList.Columns.Add('Tool', 310)
-    [void]$taskList.Columns.Add('Admin', 70)
-    [void]$tabPage.Controls.Add($taskList)
-    $script:TaskListsByCategory[$category] = $taskList
-
-    foreach ($task in $tasksByCategory[$category]) {
-        $adminText = if ($task.RequiresAdmin) { 'Yes' } else { 'No' }
-        $item = New-Object System.Windows.Forms.ListViewItem($task.Name)
-        [void]$item.SubItems.Add($adminText)
-        $item.Tag = $task.Id
-        $item.ToolTipText = $task.Description
-        [void]$taskList.Items.Add($item)
-    }
-
-    $taskList.Add_SelectedIndexChanged({
-        $selectedTask = Get-SelectedTaskFromActiveTab
-        if ($selectedTask) {
-            Update-SelectedTaskDisplay -Task $selectedTask
-        }
-    })
-
-    $taskList.Add_DoubleClick({
-        $selectedTask = Get-SelectedTaskFromActiveTab
-        if ($selectedTask) {
-            Start-ToolkitTask -Task $selectedTask
-        }
-    })
-}
+Refresh-TaskTabs
 
 $taskMonitorTimer.Add_Tick({
     if (-not $script:CurrentTaskProcess) {
@@ -1140,6 +1377,56 @@ $chooseAppsButton.Add_Click({
     }
 })
 
+$importScriptButton.Add_Click({
+    if (Test-TaskIsRunning) {
+        [System.Windows.Forms.MessageBox]::Show(
+            'Wait for the current task to finish before importing another script.',
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Filter = 'PowerShell scripts (*.ps1)|*.ps1|All files (*.*)|*.*'
+    $dialog.Multiselect = $false
+    $dialog.Title = 'Import PowerShell Script Into Toolkit'
+
+    if ($dialog.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) {
+        return
+    }
+
+    $destinationDir = Join-Path $toolkitRoot 'LegacyScripts'
+    if (-not (Test-Path -LiteralPath $destinationDir)) {
+        New-Item -Path $destinationDir -ItemType Directory -Force | Out-Null
+    }
+
+    $destinationPath = Join-Path $destinationDir ([IO.Path]::GetFileName($dialog.FileName))
+    if ((Test-Path -LiteralPath $destinationPath) -and ((Resolve-Path -LiteralPath $dialog.FileName).Path -ne (Resolve-Path -LiteralPath $destinationPath).Path)) {
+        $overwrite = [System.Windows.Forms.MessageBox]::Show(
+            "A script with this name already exists in the toolkit.`r`n`r`nOverwrite it?",
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
+        )
+
+        if ($overwrite -ne [System.Windows.Forms.DialogResult]::Yes) {
+            return
+        }
+    }
+
+    Copy-Item -LiteralPath $dialog.FileName -Destination $destinationPath -Force
+    Add-UiLogLine -Line "Imported script into toolkit: $destinationPath"
+    Refresh-TaskTabs
+    [System.Windows.Forms.MessageBox]::Show(
+        "Imported script:`r`n$destinationPath",
+        'Toolkit',
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    ) | Out-Null
+})
+
 $openLogsButton.Add_Click({
     $settings = Get-ToolkitSettings
     $logPath = Join-Path (Get-ToolkitRoot) $settings.LogRoot
@@ -1150,7 +1437,18 @@ $openLogsButton.Add_Click({
 })
 
 $openRootButton.Add_Click({
-    Start-Process explorer.exe $toolkitRoot
+    $selectedTask = Get-SelectedTaskFromActiveTab
+    if (-not $selectedTask) {
+        [System.Windows.Forms.MessageBox]::Show(
+            'Select a tool first, then open its script in the editor.',
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    Show-ScriptEditor -Task $selectedTask
 })
 
 $tabControl.Add_SelectedIndexChanged({
