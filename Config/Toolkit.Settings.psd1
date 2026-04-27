@@ -8,12 +8,13 @@
     }
 
     UpdateTools = @{
-        SupportedManufacturers = @('Dell', 'HP', 'Lenovo')
+        SupportedManufacturers = @('Dell', 'HP', 'Lenovo', 'Framework')
         DellCommandUpdatePage = 'https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=5cr1y&oscode=wt64a&productcode=command-update&src=o'
         HPClientManagementPage = 'https://www.hp.com/us-en/solutions/client-management-solutions.html'
         HPImageAssistantPage = 'https://support.hp.com/us-en/drivers/consumers/hp-image-assistant'
         LenovoSystemUpdatePage = 'https://support.lenovo.com/us/en/solutions/ht037099'
         LenovoSystemUpdateDocs = 'https://docs.lenovocdrt.com/guides/sus/'
+        FrameworkBiosDriversPage = 'https://knowledgebase.frame.work/bios-and-drivers-downloads-rJ3PaCexh'
         WindowsUpdateApiDocs = 'https://learn.microsoft.com/en-us/windows/win32/api/wuapi/nf-wuapi-iupdatesearcher-search'
     }
 }

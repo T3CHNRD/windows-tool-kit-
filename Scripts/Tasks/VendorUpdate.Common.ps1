@@ -83,6 +83,7 @@ function Get-SystemIdentity {
         'Dell' { 'Dell'; break }
         'HP|Hewlett' { 'HP'; break }
         'Lenovo' { 'Lenovo'; break }
+        'Framework' { 'Framework'; break }
         default { 'Unsupported' }
     }
 
@@ -256,6 +257,30 @@ function Invoke-LenovoVendorUpdates {
     Invoke-LoggedProcess -FilePath $systemUpdatePath -Arguments '/CM' -Label 'LenovoSystemUpdate' -AllowedExitCodes @('0', '3010') | Out-Null
 }
 
+function Invoke-FrameworkVendorUpdates {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('BIOS', 'Firmware', 'Drivers')]$Mode
+    )
+
+    $settings = Get-TaskSettings
+    $supportUrl = $settings.UpdateTools.FrameworkBiosDriversPage
+    if (-not $supportUrl) {
+        $supportUrl = 'https://knowledgebase.frame.work/bios-and-drivers-downloads-rJ3PaCexh'
+    }
+
+    Write-Output "Framework detected. Opening Framework's official BIOS and driver downloads page."
+    Write-Output "Framework does not currently provide a silent vendor CLI in this toolkit. Automated install skipped; use the official Framework workflow for $Mode."
+    Write-Output "Official Framework support page: $supportUrl"
+
+    try {
+        Start-Process $supportUrl
+        Write-Output 'Completed: opened Framework official support page.'
+    }
+    catch {
+        Write-Output "Skipped opening browser automatically: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-VendorMaintenanceUpdate {
     param(
         [Parameter(Mandatory = $true)][ValidateSet('BIOS', 'Firmware', 'Drivers')]$Mode
@@ -294,6 +319,10 @@ function Invoke-VendorMaintenanceUpdate {
                 'Drivers' { '2' }
             }
             Invoke-LenovoVendorUpdates -PackageTypes $packageTypes
+            break
+        }
+        'Framework' {
+            Invoke-FrameworkVendorUpdates -Mode $Mode
             break
         }
         default {

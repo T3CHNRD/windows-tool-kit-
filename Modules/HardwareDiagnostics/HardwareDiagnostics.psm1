@@ -200,12 +200,12 @@ function Test-TtkMouseKeyboardActivity {
         Set-InputEvent -Message "Key detected: $keyText"
     }
 
-    $form.Add_MouseMove({
+    $mouseMoveHandler = {
         $mouseMoveLabel.BackColor = $detectedColor
         Set-InputEvent -Message 'Mouse movement detected'
-    })
+    }
 
-    $form.Add_MouseDown({
+    $mouseDownHandler = {
         param($sender, $e)
         switch ($e.Button) {
             'Left' { $leftClickLabel.BackColor = $detectedColor }
@@ -213,7 +213,21 @@ function Test-TtkMouseKeyboardActivity {
             'Middle' { $middleClickLabel.BackColor = $detectedColor }
         }
         Set-InputEvent -Message "Mouse $($e.Button) click detected"
-    })
+    }
+
+    function Register-MouseTracking {
+        param(
+            [Parameter(Mandatory = $true)][System.Windows.Forms.Control]$Control
+        )
+
+        $Control.Add_MouseMove($mouseMoveHandler)
+        $Control.Add_MouseDown($mouseDownHandler)
+        foreach ($childControl in $Control.Controls) {
+            Register-MouseTracking -Control $childControl
+        }
+    }
+
+    Register-MouseTracking -Control $form
 
     $form.Add_KeyDown({
         param($sender, $e)

@@ -50,15 +50,23 @@ if (-not $task) {
     throw "Task '$TaskId' was not found."
 }
 
+$needsCompletionSummary = $task.Category -in @('Update Tools', 'Misc/Utility')
+
 try {
     & $context.WriteLog "Starting task: $($task.Name)" 'INFO'
     Invoke-ToolkitTaskById -TaskId $TaskId -Context $context
+    if ($needsCompletionSummary) {
+        & $context.WriteLog "Summary for $($task.Name): completed=$($task.Name); skipped=none reported; failed=none." 'INFO'
+    }
     & $context.WriteLog "Task completed successfully: $($task.Name)" 'INFO'
     Write-HostToken -Kind 'RESULT' -Parts @('SUCCESS', $task.Name)
     exit 0
 }
 catch {
     $message = $_.Exception.Message
+    if ($needsCompletionSummary) {
+        & $context.WriteLog "Summary for $($task.Name): completed=see task output before failure; skipped=see task output; failed=$message" 'ERROR'
+    }
     & $context.WriteLog "Task failed: $message" 'ERROR'
     Write-HostToken -Kind 'RESULT' -Parts @('FAIL', $task.Name, $message)
     exit 1

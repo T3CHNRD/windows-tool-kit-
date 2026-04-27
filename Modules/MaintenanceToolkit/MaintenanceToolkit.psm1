@@ -37,6 +37,10 @@ function Get-ToolkitSettings {
             WindowsMediaSupportPage = 'https://support.microsoft.com/en-us/windows/create-installation-media-for-windows-99a58364-8c02-206f-aa6f-40c3b507420d'
             Windows10MediaToolUrl = 'https://go.microsoft.com/fwlink/?LinkId=691209'
         }
+        UpdateTools = @{
+            SupportedManufacturers = @('Dell', 'HP', 'Lenovo', 'Framework')
+            FrameworkBiosDriversPage = 'https://knowledgebase.frame.work/bios-and-drivers-downloads-rJ3PaCexh'
+        }
     }
 }
 
@@ -453,6 +457,17 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Network.DhcpRenew'
+            Name = 'Release / Renew IP and Reset DHCP'
+            Category = 'Network Tools'
+            Description = 'Releases and renews IP leases, flushes DNS, and restarts the DHCP Client service.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DhcpRenew.ps1' -StepName 'Release/renew IP and reset DHCP'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Cleanup.TempFiles'
             Name = 'Clear Temp and Junk Files'
             Category = 'Cleanup'
@@ -530,7 +545,7 @@ function Get-ToolkitTaskCatalog {
             Id = 'Update.VendorBIOS'
             Name = 'BIOS Update Tool'
             Category = 'Update Tools'
-            Description = 'Vendor BIOS updater for Dell, HP, and Lenovo systems only. Uses vendor-supported update tooling and blocks unsupported manufacturers.'
+            Description = 'Vendor BIOS updater for Dell, HP, Lenovo, and Framework systems. Framework opens the official Framework BIOS/driver workflow for manual install.'
             RequiresAdmin = $true
             Handler = {
                 param($Context, $Task)
@@ -541,7 +556,7 @@ function Get-ToolkitTaskCatalog {
             Id = 'Update.VendorFirmware'
             Name = 'Firmware Update Tool'
             Category = 'Update Tools'
-            Description = 'Vendor firmware updater for Dell, HP, and Lenovo systems only. Uses vendor-supported update tooling and blocks unsupported manufacturers.'
+            Description = 'Vendor firmware updater for Dell, HP, Lenovo, and Framework systems. Framework opens the official Framework BIOS/driver workflow for manual install.'
             RequiresAdmin = $true
             Handler = {
                 param($Context, $Task)
@@ -552,7 +567,7 @@ function Get-ToolkitTaskCatalog {
             Id = 'Update.VendorDrivers'
             Name = 'Driver Update Tool'
             Category = 'Update Tools'
-            Description = 'Vendor driver updater for Dell, HP, and Lenovo systems only. Uses vendor-supported update tooling and blocks unsupported manufacturers.'
+            Description = 'Vendor driver updater for Dell, HP, Lenovo, and Framework systems. Framework opens the official Framework BIOS/driver workflow for manual install.'
             RequiresAdmin = $true
             Handler = {
                 param($Context, $Task)

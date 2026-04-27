@@ -265,14 +265,26 @@ $statusLabel.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 11)
 $statusLabel.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
 [void]$rightLayout.Controls.Add($statusLabel, 0, 3)
 
+$progressPanel = New-Object System.Windows.Forms.Panel
+$progressPanel.Dock = 'Fill'
+$progressPanel.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 12)
+
+$progressRoadLabel = New-Object System.Windows.Forms.Label
+$progressRoadLabel.Dock = 'Fill'
+$progressRoadLabel.TextAlign = 'MiddleLeft'
+$progressRoadLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9)
+$progressRoadLabel.Text = 'Road: >----------------------- 0%'
+[void]$progressPanel.Controls.Add($progressRoadLabel)
+
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Dock = 'Fill'
+$progressBar.Dock = 'Bottom'
+$progressBar.Height = 8
 $progressBar.Minimum = 0
 $progressBar.Maximum = 100
 $progressBar.Value = 0
 $progressBar.Style = 'Continuous'
-$progressBar.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 12)
-[void]$rightLayout.Controls.Add($progressBar, 0, 4)
+[void]$progressPanel.Controls.Add($progressBar)
+[void]$rightLayout.Controls.Add($progressPanel, 0, 4)
 
 $metaLabel = New-Object System.Windows.Forms.Label
 $metaLabel.Text = 'Requires Admin: Yes | Input: None required'
@@ -359,6 +371,24 @@ function Add-UiLogLine {
     $logBox.AppendText($timestamped + [Environment]::NewLine)
 }
 
+function Set-ToolkitProgress {
+    param(
+        [Parameter(Mandatory = $true)][int]$Value
+    )
+
+    $bounded = [Math]::Max(0, [Math]::Min(100, $Value))
+    if ($progressBar.Style -ne 'Continuous') {
+        $progressBar.Style = 'Continuous'
+    }
+    $progressBar.Value = $bounded
+
+    $roadLength = 24
+    $position = [Math]::Min(($roadLength - 1), [Math]::Floor(($bounded / 100) * ($roadLength - 1)))
+    $before = '-' * $position
+    $after = '-' * (($roadLength - 1) - $position)
+    $progressRoadLabel.Text = "Road: $before>$after $bounded%"
+}
+
 function Get-ToolkitThemePalette {
     if ($script:IsDarkMode) {
         return @{
@@ -403,7 +433,11 @@ function Set-ToolkitControlTheme {
         return
     }
 
-    if ($Control -is [System.Windows.Forms.TextBox] -or $Control -is [System.Windows.Forms.CheckedListBox] -or $Control -is [System.Windows.Forms.ListView]) {
+    if ($Control -is [System.Windows.Forms.ListView]) {
+        $Control.BackColor = [System.Drawing.Color]::White
+        $Control.ForeColor = [System.Drawing.Color]::Black
+    }
+    elseif ($Control -is [System.Windows.Forms.TextBox] -or $Control -is [System.Windows.Forms.CheckedListBox]) {
         $Control.BackColor = $Palette.SurfaceAlt
         $Control.ForeColor = $Palette.Text
     }
@@ -470,16 +504,19 @@ function Apply-ToolkitTheme {
     $descriptionBox.ForeColor = $palette.Text
     $logBox.BackColor = $palette.SurfaceAlt
     $logBox.ForeColor = $palette.Text
+    $progressPanel.BackColor = $palette.Surface
+    $progressRoadLabel.BackColor = $palette.Surface
+    $progressRoadLabel.ForeColor = $palette.MutedText
 
     foreach ($tabPage in $tabControl.TabPages) {
-        $tabPage.BackColor = $palette.PanelBack
-        $tabPage.ForeColor = $palette.Text
+        $tabPage.BackColor = [System.Drawing.Color]::White
+        $tabPage.ForeColor = [System.Drawing.Color]::Black
     }
 
     foreach ($category in $script:TaskListsByCategory.Keys) {
         $taskList = $script:TaskListsByCategory[$category]
-        $taskList.BackColor = $palette.SurfaceAlt
-        $taskList.ForeColor = $palette.Text
+        $taskList.BackColor = [System.Drawing.Color]::White
+        $taskList.ForeColor = [System.Drawing.Color]::Black
     }
 
     $runButton.BackColor = $palette.Primary
@@ -550,6 +587,7 @@ function Get-TaskSourcePath {
         'Integration.MediaCreationTool' = 'Integrations\Invoke-MediaCreationWorkflow.ps1'
         'Integration.Microsoft365'      = 'Integrations\Invoke-InstallMicrosoft365.ps1'
         'Network.Diagnostics'           = 'Scripts\Tasks\Invoke-NetworkMaintenance.ps1'
+        'Network.DhcpRenew'             = 'Scripts\Tasks\Invoke-DhcpRenew.ps1'
         'Network.ResetStack'            = 'Scripts\Tasks\Invoke-ResetNetworkStack.ps1'
         'Repair.WindowsHealth'          = 'Scripts\Tasks\Invoke-WindowsRepairChecks.ps1'
         'Update.AllApps'                = 'Scripts\Tasks\Invoke-UpdateAllApps.ps1'
@@ -924,10 +962,7 @@ function Process-TaskOutputLine {
                     [void][int]::TryParse($parts[2], [ref]$percent)
                 }
                 $status = if ($parts.Count -gt 3) { $parts[3] } else { 'Running task' }
-                if ($progressBar.Style -ne 'Continuous') {
-                    $progressBar.Style = 'Continuous'
-                }
-                $progressBar.Value = [Math]::Max(0, [Math]::Min(100, $percent))
+                Set-ToolkitProgress -Value $percent
                 $statusLabel.Text = "Status: $status"
                 return
             }
@@ -1019,7 +1054,7 @@ function Complete-RunningTask {
     $progressBar.Style = 'Continuous'
 
     if ($script:CancellationRequested) {
-        $progressBar.Value = 0
+        Set-ToolkitProgress -Value 0
         $statusLabel.Text = "Status: Cancelled - $taskName"
         [System.Windows.Forms.MessageBox]::Show(
             "Task cancelled: $taskName",
@@ -1029,7 +1064,7 @@ function Complete-RunningTask {
         ) | Out-Null
     }
     elseif ($failedMessage) {
-        $progressBar.Value = 0
+        Set-ToolkitProgress -Value 0
         $statusLabel.Text = "Status: Failed - $failedMessage"
         [System.Windows.Forms.MessageBox]::Show(
             "Task failed: $failedMessage",
@@ -1039,7 +1074,7 @@ function Complete-RunningTask {
         ) | Out-Null
     }
     else {
-        $progressBar.Value = 100
+        Set-ToolkitProgress -Value 100
         $statusLabel.Text = "Status: Completed - $taskName"
         [System.Windows.Forms.MessageBox]::Show(
             "Task completed: $taskName",
@@ -1440,18 +1475,18 @@ function Start-InteractiveHardwareTool {
     )
 
     $progressBar.Style = 'Continuous'
-    $progressBar.Value = 10
+    Set-ToolkitProgress -Value 10
     $statusLabel.Text = "Status: Opening $($Task.Name)..."
     Add-UiLogLine -Line "Opening interactive hardware tool: $($Task.Name)"
     Set-InteractiveState -Enabled $false
 
     try {
         if ($Task.Id -eq 'Hardware.MouseKeyboardTest') {
-            $progressBar.Value = 25
+            Set-ToolkitProgress -Value 25
             $result = Test-TtkMouseKeyboardActivity
         }
         elseif ($Task.Id -eq 'Hardware.MonitorPixelTest') {
-            $progressBar.Value = 25
+            Set-ToolkitProgress -Value 25
             $result = Start-TtkMonitorPixelTest
         }
         else {
@@ -1461,7 +1496,7 @@ function Start-InteractiveHardwareTool {
         if ($result) {
             Add-UiLogLine -Line ([string]$result)
         }
-        $progressBar.Value = 100
+        Set-ToolkitProgress -Value 100
         $statusLabel.Text = "Status: Completed - $($Task.Name)"
         Add-UiLogLine -Line "Interactive hardware tool closed: $($Task.Name)"
         [System.Windows.Forms.MessageBox]::Show(
@@ -1472,7 +1507,7 @@ function Start-InteractiveHardwareTool {
         ) | Out-Null
     }
     catch {
-        $progressBar.Value = 0
+        Set-ToolkitProgress -Value 0
         $statusLabel.Text = "Status: Failed - $($_.Exception.Message)"
         Add-UiLogLine -Line "Interactive hardware tool failed: $($_.Exception.Message)"
         [System.Windows.Forms.MessageBox]::Show(
@@ -1524,7 +1559,7 @@ function Start-ToolkitTask {
         Update-SelectedTaskDisplay -Task $Task
     }
 
-    $progressBar.Value = 0
+    Set-ToolkitProgress -Value 0
     $progressBar.Style = 'Marquee'
     $statusLabel.Text = "Status: Starting $($Task.Name)..."
     Add-UiLogLine -Line "Queued task: $($Task.Name)"
