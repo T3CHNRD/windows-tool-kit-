@@ -18,7 +18,13 @@ $appxOut = Join-Path $logDir "InstalledApps-appx-$stamp.csv"
 $selectedOut = Join-Path $logDir "SelectedApps-review-$stamp.txt"
 
 Write-Output 'Collecting installed desktop apps (winget)...'
-winget.exe list | Out-File -FilePath $wingetOut -Encoding utf8
+if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
+    winget.exe list --accept-source-agreements | Out-File -FilePath $wingetOut -Encoding utf8
+}
+else {
+    'winget.exe was not found on this PC. Desktop app inventory was skipped.' | Out-File -FilePath $wingetOut -Encoding utf8
+    Write-Output 'winget.exe was not found. Desktop app inventory was skipped.'
+}
 
 Write-Output 'Collecting AppX packages...'
 Get-AppxPackage | Select-Object Name, PackageFullName, Publisher, Version |

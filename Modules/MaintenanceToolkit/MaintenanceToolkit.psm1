@@ -155,11 +155,23 @@ function Invoke-ToolkitCommand {
 
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
-    if ($stdout) { & $Context.WriteLog $stdout 'INFO' }
-    if ($stderr) { & $Context.WriteLog $stderr 'WARN' }
+    $stdoutLines = @()
+    $stderrLines = @()
+    if ($stdout) {
+        $stdoutLines = @($stdout -split "(`r`n|`n|`r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        & $Context.WriteLog $stdout 'INFO'
+    }
+    if ($stderr) {
+        $stderrLines = @($stderr -split "(`r`n|`n|`r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        & $Context.WriteLog $stderr 'WARN'
+    }
 
     if ($RequireSuccessExitCode -and $process.ExitCode -ne 0) {
-        throw "$StepName failed with exit code $($process.ExitCode)."
+        $detailLines = @($stderrLines + $stdoutLines) |
+            Where-Object { $_ -and $_ -notmatch '^\s*(At |CategoryInfo|FullyQualifiedErrorId|\+ )' } |
+            Select-Object -Last 4
+        $detail = if ($detailLines.Count -gt 0) { ' Details: ' + ($detailLines -join ' ') } else { '' }
+        throw "$StepName failed with exit code $($process.ExitCode).$detail"
     }
 
     Invoke-TaskStep -Context $Context -Percent $EndPercent -Status "$StepName complete" -LogMessage "$StepName finished with exit code $($process.ExitCode)."

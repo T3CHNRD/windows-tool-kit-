@@ -15,6 +15,9 @@ if (-not (Test-IsAdmin)) {
 }
 
 Write-Output 'Updating all supported apps with winget...'
+if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+    throw 'winget.exe was not found. Install or repair Microsoft App Installer from Microsoft Store, then rerun app updates.'
+}
 
 $stdoutPath = Join-Path $env:TEMP ("winget-upgrade-{0}-stdout.log" -f [guid]::NewGuid().ToString('N'))
 $stderrPath = Join-Path $env:TEMP ("winget-upgrade-{0}-stderr.log" -f [guid]::NewGuid().ToString('N'))
