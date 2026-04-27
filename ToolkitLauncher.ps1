@@ -114,6 +114,7 @@ $script:CurrentTaskOutputLineCount = 0
 $script:CurrentTaskErrorLineCount = 0
 $script:CurrentTaskResult = $null
 $script:CancellationRequested = $false
+$script:IsDarkMode = $false
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "T3CHNRD'S Windows Tool Kit"
@@ -137,9 +138,12 @@ $menuStrip.BackColor = [System.Drawing.Color]::White
 $fileMenu = New-Object System.Windows.Forms.ToolStripMenuItem('&File')
 $importScriptMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Import Script...')
 $openLogsMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Open Logs Folder')
+$darkModeMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Dark Mode')
+$darkModeMenuItem.CheckOnClick = $true
 $exitMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Exit')
 [void]$fileMenu.DropDownItems.Add($importScriptMenuItem)
 [void]$fileMenu.DropDownItems.Add($openLogsMenuItem)
+[void]$fileMenu.DropDownItems.Add($darkModeMenuItem)
 [void]$fileMenu.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 [void]$fileMenu.DropDownItems.Add($exitMenuItem)
 
@@ -353,6 +357,133 @@ function Add-UiLogLine {
 
     $timestamped = "[{0:HH:mm:ss}] {1}" -f (Get-Date), $Line
     $logBox.AppendText($timestamped + [Environment]::NewLine)
+}
+
+function Get-ToolkitThemePalette {
+    if ($script:IsDarkMode) {
+        return @{
+            FormBack = [System.Drawing.Color]::FromArgb(17, 24, 39)
+            PanelBack = [System.Drawing.Color]::FromArgb(24, 34, 52)
+            ContentBack = [System.Drawing.Color]::FromArgb(14, 20, 32)
+            Surface = [System.Drawing.Color]::FromArgb(31, 42, 62)
+            SurfaceAlt = [System.Drawing.Color]::FromArgb(38, 51, 74)
+            Text = [System.Drawing.Color]::FromArgb(235, 241, 250)
+            MutedText = [System.Drawing.Color]::FromArgb(169, 183, 204)
+            Border = [System.Drawing.Color]::FromArgb(75, 91, 116)
+            Header = [System.Drawing.Color]::FromArgb(11, 22, 42)
+            HeaderSub = [System.Drawing.Color]::FromArgb(174, 194, 224)
+            Primary = [System.Drawing.Color]::FromArgb(62, 125, 207)
+            ButtonBack = [System.Drawing.Color]::FromArgb(42, 56, 80)
+        }
+    }
+
+    return @{
+        FormBack = [System.Drawing.Color]::FromArgb(244, 247, 252)
+        PanelBack = [System.Drawing.Color]::FromArgb(244, 247, 252)
+        ContentBack = [System.Drawing.Color]::FromArgb(232, 237, 245)
+        Surface = [System.Drawing.Color]::White
+        SurfaceAlt = [System.Drawing.Color]::FromArgb(247, 249, 252)
+        Text = [System.Drawing.Color]::FromArgb(15, 23, 42)
+        MutedText = [System.Drawing.Color]::FromArgb(84, 96, 118)
+        Border = [System.Drawing.Color]::FromArgb(190, 198, 211)
+        Header = [System.Drawing.Color]::FromArgb(26, 45, 78)
+        HeaderSub = [System.Drawing.Color]::FromArgb(202, 216, 240)
+        Primary = [System.Drawing.Color]::FromArgb(47, 108, 188)
+        ButtonBack = [System.Drawing.Color]::White
+    }
+}
+
+function Set-ToolkitControlTheme {
+    param(
+        [Parameter(Mandatory = $true)]$Control,
+        [Parameter(Mandatory = $true)][hashtable]$Palette
+    )
+
+    if ($Control -is [System.Windows.Forms.ProgressBar]) {
+        return
+    }
+
+    if ($Control -is [System.Windows.Forms.TextBox] -or $Control -is [System.Windows.Forms.CheckedListBox] -or $Control -is [System.Windows.Forms.ListView]) {
+        $Control.BackColor = $Palette.SurfaceAlt
+        $Control.ForeColor = $Palette.Text
+    }
+    elseif ($Control -is [System.Windows.Forms.Button]) {
+        if ($Control -eq $runButton) {
+            $Control.BackColor = $Palette.Primary
+            $Control.ForeColor = [System.Drawing.Color]::White
+        }
+        else {
+            $Control.BackColor = $Palette.ButtonBack
+            $Control.ForeColor = $Palette.Text
+        }
+    }
+    elseif ($Control -is [System.Windows.Forms.Label]) {
+        $Control.ForeColor = $Palette.Text
+    }
+    elseif ($Control -is [System.Windows.Forms.TabPage] -or $Control -is [System.Windows.Forms.Panel] -or $Control -is [System.Windows.Forms.TableLayoutPanel] -or $Control -is [System.Windows.Forms.FlowLayoutPanel]) {
+        $Control.BackColor = $Palette.PanelBack
+        $Control.ForeColor = $Palette.Text
+    }
+
+    foreach ($child in $Control.Controls) {
+        Set-ToolkitControlTheme -Control $child -Palette $Palette
+    }
+}
+
+function Set-ToolkitMenuTheme {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Palette
+    )
+
+    $menuStrip.BackColor = $Palette.Surface
+    $menuStrip.ForeColor = $Palette.Text
+    foreach ($menuItem in @($fileMenu, $editMenu, $importScriptMenuItem, $openLogsMenuItem, $darkModeMenuItem, $exitMenuItem, $editScriptMenuItem)) {
+        $menuItem.BackColor = $Palette.Surface
+        $menuItem.ForeColor = $Palette.Text
+        if ($menuItem.DropDown) {
+            $menuItem.DropDown.BackColor = $Palette.Surface
+            $menuItem.DropDown.ForeColor = $Palette.Text
+        }
+    }
+}
+
+function Apply-ToolkitTheme {
+    $palette = Get-ToolkitThemePalette
+
+    $form.BackColor = $palette.FormBack
+    $contentSplit.BackColor = $palette.ContentBack
+    $contentSplit.Panel1.BackColor = $palette.PanelBack
+    $contentSplit.Panel2.BackColor = $palette.Surface
+    $headerPanel.BackColor = $palette.Header
+    $titleLabel.ForeColor = [System.Drawing.Color]::White
+    $subLabel.ForeColor = $palette.HeaderSub
+    $leftLayout.BackColor = $palette.PanelBack
+    $rightLayout.BackColor = $palette.Surface
+
+    Set-ToolkitMenuTheme -Palette $palette
+    Set-ToolkitControlTheme -Control $leftLayout -Palette $palette
+    Set-ToolkitControlTheme -Control $rightLayout -Palette $palette
+
+    $descriptionHintLabel.ForeColor = $palette.MutedText
+    $footerLabel.ForeColor = $palette.MutedText
+    $descriptionBox.BackColor = $palette.SurfaceAlt
+    $descriptionBox.ForeColor = $palette.Text
+    $logBox.BackColor = $palette.SurfaceAlt
+    $logBox.ForeColor = $palette.Text
+
+    foreach ($tabPage in $tabControl.TabPages) {
+        $tabPage.BackColor = $palette.PanelBack
+        $tabPage.ForeColor = $palette.Text
+    }
+
+    foreach ($category in $script:TaskListsByCategory.Keys) {
+        $taskList = $script:TaskListsByCategory[$category]
+        $taskList.BackColor = $palette.SurfaceAlt
+        $taskList.ForeColor = $palette.Text
+    }
+
+    $runButton.BackColor = $palette.Primary
+    $runButton.ForeColor = [System.Drawing.Color]::White
 }
 
 function Test-TaskIsRunning {
@@ -734,6 +865,8 @@ function Refresh-TaskTabs {
     else {
         Update-SelectedTaskDisplay -Task $null
     }
+
+    Apply-ToolkitTheme
 }
 
 Refresh-TaskCatalogState
@@ -1529,6 +1662,11 @@ $openLogsButton.Add_Click({
 
 $importScriptMenuItem.Add_Click({ Import-ScriptIntoToolkit })
 $openLogsMenuItem.Add_Click({ Open-ToolkitLogsFolder })
+$darkModeMenuItem.Add_Click({
+    $script:IsDarkMode = [bool]$darkModeMenuItem.Checked
+    Apply-ToolkitTheme
+    Add-UiLogLine -Line ("Dark mode {0}." -f $(if ($script:IsDarkMode) { 'enabled' } else { 'disabled' }))
+})
 $exitMenuItem.Add_Click({ $form.Close() })
 $editScriptMenuItem.Add_Click({ Edit-SelectedScript })
 
@@ -1571,6 +1709,7 @@ function Apply-SplitterLayout {
 }
 
 $form.Add_Shown({
+    Apply-ToolkitTheme
     Apply-SplitterLayout
     if ($tabControl.TabPages.Count -gt 0) {
         $tabControl.SelectedIndex = 0
