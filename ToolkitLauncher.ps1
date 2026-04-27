@@ -273,7 +273,9 @@ $progressRoadLabel = New-Object System.Windows.Forms.Label
 $progressRoadLabel.Dock = 'Fill'
 $progressRoadLabel.TextAlign = 'MiddleLeft'
 $progressRoadLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9)
-$progressRoadLabel.Text = 'Road: >----------------------- 0%'
+$script:ProgressMotorcycle = "o$([char]::ConvertFromUtf32(0x1F3CD))"
+$script:ProgressFinishFlag = [char]::ConvertFromUtf32(0x1F3C1)
+$progressRoadLabel.Text = "Road: $script:ProgressMotorcycle-----------------------$script:ProgressFinishFlag 0%"
 [void]$progressPanel.Controls.Add($progressRoadLabel)
 
 $progressBar = New-Object System.Windows.Forms.ProgressBar
@@ -384,9 +386,9 @@ function Set-ToolkitProgress {
 
     $roadLength = 24
     $position = [Math]::Min(($roadLength - 1), [Math]::Floor(($bounded / 100) * ($roadLength - 1)))
-    $before = '-' * $position
+    $before = '=' * $position
     $after = '-' * (($roadLength - 1) - $position)
-    $progressRoadLabel.Text = "Road: $before>$after $bounded%"
+    $progressRoadLabel.Text = "Road: $before$script:ProgressMotorcycle$after$script:ProgressFinishFlag $bounded%"
 }
 
 function Get-ToolkitThemePalette {

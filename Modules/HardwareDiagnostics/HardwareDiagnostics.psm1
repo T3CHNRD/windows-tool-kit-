@@ -148,6 +148,29 @@ function Test-TtkMouseKeyboardActivity {
         @('Alt', 'Menu', 72), @('Ctrl', 'ControlKey', 82), @('Left', 'Left'), @('Up', 'Up'), @('Down', 'Down'), @('Right', 'Right')
     )
 
+    $keypadLabel = New-Object System.Windows.Forms.Label
+    $keypadLabel.Text = '10-Key / Numeric Keypad'
+    $keypadLabel.AutoSize = $true
+    $keypadLabel.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10, [System.Drawing.FontStyle]::Bold)
+    $keypadLabel.Margin = New-Object System.Windows.Forms.Padding(0, 8, 0, 4)
+    [void]$keyboardPanel.Controls.Add($keypadLabel)
+
+    Add-KeyRow -Keys @(
+        @('NumLock', 'NumLock', 86), @('Num /', 'Divide'), @('Num *', 'Multiply'), @('Num -', 'Subtract')
+    )
+    Add-KeyRow -Keys @(
+        @('Num 7', 'NumPad7'), @('Num 8', 'NumPad8'), @('Num 9', 'NumPad9'), @('Num +', 'Add')
+    )
+    Add-KeyRow -Keys @(
+        @('Num 4', 'NumPad4'), @('Num 5', 'NumPad5'), @('Num 6', 'NumPad6'), @('Num Enter', 'Return', 94)
+    )
+    Add-KeyRow -Keys @(
+        @('Num 1', 'NumPad1'), @('Num 2', 'NumPad2'), @('Num 3', 'NumPad3'), @('Num .', 'Decimal')
+    )
+    Add-KeyRow -Keys @(
+        @('Num 0', 'NumPad0', 116)
+    )
+
     $statusLabel = New-Object System.Windows.Forms.Label
     $statusLabel.Text = "Last input: $lastEvent"
     $statusLabel.AutoSize = $true

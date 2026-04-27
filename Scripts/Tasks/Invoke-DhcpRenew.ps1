@@ -43,26 +43,38 @@ function Invoke-DhcpStep {
     }
 }
 
+function Invoke-NativeDhcpCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    & $FilePath @Arguments | Write-Output
+    if ($LASTEXITCODE -ne 0) {
+        throw "$FilePath $($Arguments -join ' ') exited with code $LASTEXITCODE."
+    }
+}
+
 Write-Output 'Starting IP release/renew and DHCP reset workflow.'
 
 Invoke-DhcpStep -Name 'ipconfig /release' -Action {
-    ipconfig.exe /release | Write-Output
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/release')
 }
 
 Invoke-DhcpStep -Name 'restart DHCP Client service' -Action {
     Restart-Service -Name Dhcp -Force -ErrorAction Stop
-}
+} -Optional
 
 Invoke-DhcpStep -Name 'ipconfig /renew' -Action {
-    ipconfig.exe /renew | Write-Output
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/renew')
 }
 
 Invoke-DhcpStep -Name 'flush DNS resolver cache' -Action {
-    ipconfig.exe /flushdns | Write-Output
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/flushdns')
 }
 
 Invoke-DhcpStep -Name 'register DNS records' -Action {
-    ipconfig.exe /registerdns | Write-Output
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/registerdns')
 } -Optional
 
 Write-Output 'Network DHCP summary:'
