@@ -244,6 +244,7 @@ function Get-ToolkitCategoryOrder {
         'Network Tools',
         'OneNote & Documents',
         'Repair',
+        'Security',
         'Storage / Setup',
         'Update Tools'
     )
@@ -531,6 +532,50 @@ function Get-ToolkitTaskCatalog {
             Handler = {
                 param($Context, $Task)
                 Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DiskSpaceMonitor.ps1' -StepName 'Disk space monitoring'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.BaselineAudit'
+            Name = 'Windows Security Baseline Audit'
+            Category = 'Security'
+            Description = 'Runs local defensive checks for Defender, firewall, BitLocker, Secure Boot, SMBv1, RDP, local admins, and listening-port exposure.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-SecurityBaselineAudit.ps1' -StepName 'Windows security baseline audit'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.DefenderQuickScan'
+            Name = 'Microsoft Defender Quick Scan'
+            Category = 'Security'
+            Description = 'Starts a Microsoft Defender quick scan and reports Defender status and recent detections.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DefenderQuickScan.ps1' -StepName 'Microsoft Defender quick scan'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.OpenPortsAudit'
+            Name = 'Open Ports and Services Audit'
+            Category = 'Security'
+            Description = 'Lists local listening TCP ports, owning processes, related services, and firewall profile state for exposure review.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-OpenPortsAudit.ps1' -StepName 'Open ports and services audit'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.PowerShellRiskScan'
+            Name = 'PowerShell Script Risk Scan'
+            Category = 'Security'
+            Description = 'Performs SAST-style scanning of toolkit PowerShell files for risky patterns such as encoded commands, dynamic execution, downloads, and credential handling.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-PowerShellRiskScan.ps1' -StepName 'PowerShell script risk scan'
             }
         },
         [pscustomobject]@{

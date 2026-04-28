@@ -671,6 +671,10 @@ function Get-TaskSourcePath {
         'Network.DhcpRenew'             = 'Scripts\Tasks\Invoke-DhcpRenew.ps1'
         'Network.ResetStack'            = 'Scripts\Tasks\Invoke-ResetNetworkStack.ps1'
         'Repair.WindowsHealth'          = 'Scripts\Tasks\Invoke-WindowsRepairChecks.ps1'
+        'Security.BaselineAudit'        = 'Scripts\Tasks\Invoke-SecurityBaselineAudit.ps1'
+        'Security.DefenderQuickScan'    = 'Scripts\Tasks\Invoke-DefenderQuickScan.ps1'
+        'Security.OpenPortsAudit'       = 'Scripts\Tasks\Invoke-OpenPortsAudit.ps1'
+        'Security.PowerShellRiskScan'   = 'Scripts\Tasks\Invoke-PowerShellRiskScan.ps1'
         'Update.AllApps'                = 'Scripts\Tasks\Invoke-UpdateAllApps.ps1'
         'Update.VendorBIOS'             = 'Scripts\Tasks\Invoke-BiosUpdate.ps1'
         'Update.VendorDrivers'          = 'Scripts\Tasks\Invoke-DriverUpdate.ps1'
@@ -845,9 +849,20 @@ External project credits:
   https://lottiefiles.com/free-animations/loading-bar
   Used as visual inspiration for the toolkit's motorcycle progress indicator. No third-party animation file is bundled.
 
+- White-hat security research references
+  https://whitehat.eu/
+  https://www.hackerone.com/knowledge-center/white-hat-hacker
+  https://www.welivesecurity.com/2016/10/31/10-gadgets-every-white-hat-hacker-needs-toolkit/
+  Used as defensive inspiration for the Security tab. The toolkit only performs local/authorized checks.
+
+- Aikido Security SAST reference
+  https://www.aikido.dev/code/static-code-analysis-sast
+  Used as inspiration for the PowerShell script-risk scan concept. No Aikido code or service is bundled.
+
 Notes:
 - Microsoft 365 installation still requires valid Microsoft licensing.
 - The toolkit avoids activation-bypass or piracy workflows.
+- Security tools are for systems you own or are explicitly authorized to assess.
 "@
 
     [System.Windows.Forms.MessageBox]::Show(
@@ -1082,9 +1097,7 @@ function Process-TaskOutputLine {
                 return
             }
             'LOG' {
-                if ($parts.Count -gt 2) {
-                    Add-UiLogLine -Line $parts[2]
-                }
+                Add-UiLogLine -Line $Line.Substring('__TTK__|LOG|'.Length)
                 return
             }
             'RESULT' {
