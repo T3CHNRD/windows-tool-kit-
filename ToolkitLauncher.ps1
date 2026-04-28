@@ -140,10 +140,12 @@ $importScriptMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Impor
 $openLogsMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Open Logs Folder')
 $darkModeMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Dark Mode')
 $darkModeMenuItem.CheckOnClick = $true
+$aboutMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('About / Credits')
 $exitMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Exit')
 [void]$fileMenu.DropDownItems.Add($importScriptMenuItem)
 [void]$fileMenu.DropDownItems.Add($openLogsMenuItem)
 [void]$fileMenu.DropDownItems.Add($darkModeMenuItem)
+[void]$fileMenu.DropDownItems.Add($aboutMenuItem)
 [void]$fileMenu.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 [void]$fileMenu.DropDownItems.Add($exitMenuItem)
 
@@ -273,9 +275,14 @@ $progressRoadLabel = New-Object System.Windows.Forms.Label
 $progressRoadLabel.Dock = 'Fill'
 $progressRoadLabel.TextAlign = 'MiddleLeft'
 $progressRoadLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9)
-$script:ProgressMotorcycle = "o$([char]::ConvertFromUtf32(0x1F3CD))"
+$script:ProgressRiderFrames = @(
+    "o$([char]::ConvertFromUtf32(0x1F3CD))",
+    "o$([char]::ConvertFromUtf32(0x1F3CD))~",
+    "o$([char]::ConvertFromUtf32(0x1F3CD))~~",
+    "o$([char]::ConvertFromUtf32(0x1F3CD))~~~"
+)
 $script:ProgressFinishFlag = [char]::ConvertFromUtf32(0x1F3C1)
-$progressRoadLabel.Text = "Road: $script:ProgressMotorcycle-----------------------$script:ProgressFinishFlag 0%"
+$progressRoadLabel.Text = "Road: $($script:ProgressRiderFrames[0])-----------------------$script:ProgressFinishFlag 0%"
 [void]$progressPanel.Controls.Add($progressRoadLabel)
 
 $progressBar = New-Object System.Windows.Forms.ProgressBar
@@ -388,7 +395,9 @@ function Set-ToolkitProgress {
     $position = [Math]::Min(($roadLength - 1), [Math]::Floor(($bounded / 100) * ($roadLength - 1)))
     $before = '=' * $position
     $after = '-' * (($roadLength - 1) - $position)
-    $progressRoadLabel.Text = "Road: $before$script:ProgressMotorcycle$after$script:ProgressFinishFlag $bounded%"
+    $frameIndex = [Math]::Floor(((Get-Date).Millisecond / 250)) % $script:ProgressRiderFrames.Count
+    $rider = $script:ProgressRiderFrames[$frameIndex]
+    $progressRoadLabel.Text = "Road: $before$rider$after$script:ProgressFinishFlag $bounded%"
 }
 
 function Get-ToolkitThemePalette {
@@ -473,7 +482,7 @@ function Set-ToolkitMenuTheme {
 
     $menuStrip.BackColor = $Palette.Surface
     $menuStrip.ForeColor = $Palette.Text
-    foreach ($menuItem in @($fileMenu, $editMenu, $importScriptMenuItem, $openLogsMenuItem, $darkModeMenuItem, $exitMenuItem, $editScriptMenuItem)) {
+    foreach ($menuItem in @($fileMenu, $editMenu, $importScriptMenuItem, $openLogsMenuItem, $darkModeMenuItem, $aboutMenuItem, $exitMenuItem, $editScriptMenuItem)) {
         $menuItem.BackColor = $Palette.Surface
         $menuItem.ForeColor = $Palette.Text
         if ($menuItem.DropDown) {
@@ -748,6 +757,35 @@ function Open-ToolkitLogsFolder {
         New-Item -Path $logPath -ItemType Directory -Force | Out-Null
     }
     Start-Process explorer.exe $logPath
+}
+
+function Show-ToolkitAbout {
+    $aboutText = @"
+T3CHNRD'S Windows Tool Kit
+
+Created for T3CHNRD / GitHub: https://github.com/T3CHNRD
+Project repository: https://github.com/T3CHNRD/windows-tool-kit-
+
+External project credits:
+- mallockey/Install-Microsoft365
+  https://github.com/mallockey/Install-Microsoft365
+  Used as the legitimate Microsoft 365 / Office Deployment Tool workflow integration.
+
+- LottieFiles loading bar animations
+  https://lottiefiles.com/free-animations/loading-bar
+  Used as visual inspiration for the toolkit's motorcycle progress indicator. No third-party animation file is bundled.
+
+Notes:
+- Microsoft 365 installation still requires valid Microsoft licensing.
+- The toolkit avoids activation-bypass or piracy workflows.
+"@
+
+    [System.Windows.Forms.MessageBox]::Show(
+        $aboutText,
+        "About T3CHNRD'S Windows Tool Kit",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    ) | Out-Null
 }
 
 function Import-ScriptIntoToolkit {
@@ -1706,6 +1744,7 @@ $darkModeMenuItem.Add_Click({
 })
 $exitMenuItem.Add_Click({ $form.Close() })
 $editScriptMenuItem.Add_Click({ Edit-SelectedScript })
+$aboutMenuItem.Add_Click({ Show-ToolkitAbout })
 
 $tabControl.Add_SelectedIndexChanged({
     Select-FirstTaskInTab
