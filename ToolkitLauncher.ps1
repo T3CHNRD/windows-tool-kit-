@@ -227,7 +227,7 @@ $rightLayout.RowCount = 10
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 140)))
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
-[void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 28)))
+[void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 58)))
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 52)))
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
@@ -271,19 +271,82 @@ $progressPanel = New-Object System.Windows.Forms.Panel
 $progressPanel.Dock = 'Fill'
 $progressPanel.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 12)
 
-$progressRoadLabel = New-Object System.Windows.Forms.Label
-$progressRoadLabel.Dock = 'Fill'
-$progressRoadLabel.TextAlign = 'MiddleLeft'
-$progressRoadLabel.Font = New-Object System.Drawing.Font('Segoe UI', 9)
-$script:ProgressRiderFrames = @(
-    "o$([char]::ConvertFromUtf32(0x1F3CD))",
-    "o$([char]::ConvertFromUtf32(0x1F3CD))~",
-    "o$([char]::ConvertFromUtf32(0x1F3CD))~~",
-    "o$([char]::ConvertFromUtf32(0x1F3CD))~~~"
-)
-$script:ProgressFinishFlag = [char]::ConvertFromUtf32(0x1F3C1)
-$progressRoadLabel.Text = "Road: $($script:ProgressRiderFrames[0])-----------------------$script:ProgressFinishFlag 0%"
-[void]$progressPanel.Controls.Add($progressRoadLabel)
+$script:ProgressValue = 0
+$script:ProgressAnimationFrame = 0
+
+$progressRoadPanel = New-Object System.Windows.Forms.Panel
+$progressRoadPanel.Dock = 'Fill'
+$progressRoadPanel.Height = 46
+$progressRoadPanel.BackColor = [System.Drawing.Color]::FromArgb(249, 251, 255)
+$progressRoadPanel.Add_Paint({
+    param($sender, $paintEvent)
+
+    $graphics = $paintEvent.Graphics
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $bounds = $sender.ClientRectangle
+    if ($bounds.Width -lt 80 -or $bounds.Height -lt 30) {
+        return
+    }
+
+    $trackLeft = 12
+    $trackTop = [Math]::Max(14, [Math]::Floor($bounds.Height / 2) - 5)
+    $trackWidth = [Math]::Max(20, $bounds.Width - 74)
+    $trackHeight = 10
+    $percent = [Math]::Max(0, [Math]::Min(100, [int]$script:ProgressValue))
+    $fillWidth = [Math]::Floor($trackWidth * ($percent / 100))
+    $bikeX = $trackLeft + [Math]::Max(0, $fillWidth) - 10
+    if ($bikeX -lt $trackLeft) { $bikeX = $trackLeft }
+    if ($bikeX -gt ($trackLeft + $trackWidth - 24)) { $bikeX = $trackLeft + $trackWidth - 24 }
+    $bikeY = $trackTop - 17 + (($script:ProgressAnimationFrame % 2) * 1)
+
+    $trackBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(218, 225, 235))
+    $fillBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(44, 157, 87))
+    $stripePen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, 255, 255), 2)
+    $darkPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(42, 52, 66), 2)
+    $bikeBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(38, 125, 205))
+    $riderBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(248, 184, 65))
+    $wheelBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(20, 27, 36))
+    $flagBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(230, 57, 70))
+    $textBrush = New-Object System.Drawing.SolidBrush($sender.ForeColor)
+    $font = New-Object System.Drawing.Font('Segoe UI Semibold', 8)
+
+    try {
+        $graphics.FillRectangle($trackBrush, $trackLeft, $trackTop, $trackWidth, $trackHeight)
+        if ($fillWidth -gt 0) {
+            $graphics.FillRectangle($fillBrush, $trackLeft, $trackTop, $fillWidth, $trackHeight)
+        }
+
+        for ($stripeX = $trackLeft + 18; $stripeX -lt ($trackLeft + $trackWidth); $stripeX += 36) {
+            $graphics.DrawLine($stripePen, $stripeX, $trackTop + 5, $stripeX + 14, $trackTop + 5)
+        }
+
+        $flagX = $trackLeft + $trackWidth + 10
+        $graphics.DrawLine($darkPen, $flagX, $trackTop - 15, $flagX, $trackTop + 16)
+        $graphics.FillPolygon($flagBrush, @(
+            (New-Object System.Drawing.Point($flagX, $trackTop - 15)),
+            (New-Object System.Drawing.Point($flagX + 22, $trackTop - 9)),
+            (New-Object System.Drawing.Point($flagX, $trackTop - 3))
+        ))
+
+        $graphics.FillEllipse($wheelBrush, $bikeX, $bikeY + 20, 10, 10)
+        $graphics.FillEllipse($wheelBrush, $bikeX + 24, $bikeY + 20, 10, 10)
+        $graphics.DrawLine($darkPen, $bikeX + 5, $bikeY + 24, $bikeX + 18, $bikeY + 12)
+        $graphics.DrawLine($darkPen, $bikeX + 18, $bikeY + 12, $bikeX + 29, $bikeY + 24)
+        $graphics.DrawLine($darkPen, $bikeX + 10, $bikeY + 24, $bikeX + 29, $bikeY + 24)
+        $graphics.FillRectangle($bikeBrush, $bikeX + 13, $bikeY + 14, 14, 7)
+        $graphics.FillEllipse($riderBrush, $bikeX + 15, $bikeY + 3, 9, 9)
+        $graphics.DrawLine($darkPen, $bikeX + 19, $bikeY + 12, $bikeX + 15, $bikeY + 21)
+        $graphics.DrawLine($darkPen, $bikeX + 20, $bikeY + 12, $bikeX + 27, $bikeY + 19)
+
+        $graphics.DrawString(('{0}%' -f $percent), $font, $textBrush, ($trackLeft + $trackWidth - 34), 0)
+    }
+    finally {
+        foreach ($resource in @($trackBrush, $fillBrush, $stripePen, $darkPen, $bikeBrush, $riderBrush, $wheelBrush, $flagBrush, $textBrush, $font)) {
+            if ($resource) { $resource.Dispose() }
+        }
+    }
+})
+[void]$progressPanel.Controls.Add($progressRoadPanel)
 
 $progressBar = New-Object System.Windows.Forms.ProgressBar
 $progressBar.Dock = 'Bottom'
@@ -365,6 +428,16 @@ $footerLabel.Margin = New-Object System.Windows.Forms.Padding(0, 8, 0, 0)
 $taskMonitorTimer = New-Object System.Windows.Forms.Timer
 $taskMonitorTimer.Interval = 450
 
+$progressAnimationTimer = New-Object System.Windows.Forms.Timer
+$progressAnimationTimer.Interval = 120
+$progressAnimationTimer.Add_Tick({
+    if (Test-TaskIsRunning) {
+        $script:ProgressAnimationFrame += 1
+        $progressRoadPanel.Invalidate()
+    }
+})
+$progressAnimationTimer.Start()
+
 function Add-UiLogLine {
     param(
         [AllowNull()]
@@ -391,13 +464,9 @@ function Set-ToolkitProgress {
     }
     $progressBar.Value = $bounded
 
-    $roadLength = 24
-    $position = [Math]::Min(($roadLength - 1), [Math]::Floor(($bounded / 100) * ($roadLength - 1)))
-    $before = '=' * $position
-    $after = '-' * (($roadLength - 1) - $position)
-    $frameIndex = [Math]::Floor(((Get-Date).Millisecond / 250)) % $script:ProgressRiderFrames.Count
-    $rider = $script:ProgressRiderFrames[$frameIndex]
-    $progressRoadLabel.Text = "Road: $before$rider$after$script:ProgressFinishFlag $bounded%"
+    $script:ProgressValue = $bounded
+    $script:ProgressAnimationFrame += 1
+    $progressRoadPanel.Invalidate()
 }
 
 function Get-ToolkitThemePalette {
@@ -516,8 +585,9 @@ function Apply-ToolkitTheme {
     $logBox.BackColor = $palette.SurfaceAlt
     $logBox.ForeColor = $palette.Text
     $progressPanel.BackColor = $palette.Surface
-    $progressRoadLabel.BackColor = $palette.Surface
-    $progressRoadLabel.ForeColor = $palette.MutedText
+    $progressRoadPanel.BackColor = $palette.Surface
+    $progressRoadPanel.ForeColor = $palette.MutedText
+    $progressRoadPanel.Invalidate()
 
     foreach ($tabPage in $tabControl.TabPages) {
         $tabPage.BackColor = [System.Drawing.Color]::White

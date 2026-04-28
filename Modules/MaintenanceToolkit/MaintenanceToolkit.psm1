@@ -137,11 +137,48 @@ function Invoke-ToolkitCommand {
     $commandLog = "{0}: {1} {2}" -f $StepName, $FilePath, $Arguments
     Invoke-TaskStep -Context $Context -Percent $StartPercent -Status $StepName -LogMessage $commandLog
 
+    $stdoutLines = New-Object 'System.Collections.Generic.List[string]'
+    $stderrLines = New-Object 'System.Collections.Generic.List[string]'
+    $commandStamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+    $stdoutPath = Join-Path $env:TEMP ("T3CHNRD-Toolkit-{0}-stdout.log" -f $commandStamp)
+    $stderrPath = Join-Path $env:TEMP ("T3CHNRD-Toolkit-{0}-stderr.log" -f $commandStamp)
+    $stdoutCount = 0
+    $stderrCount = 0
+
+    function Receive-ToolkitCommandFileOutput {
+        param(
+            [Parameter(Mandatory = $true)][string]$Path,
+            [Parameter(Mandatory = $true)][ref]$ProcessedCount,
+            [Parameter(Mandatory = $true)][string]$Level,
+            [Parameter(Mandatory = $true)]$LineStore
+        )
+
+        if (-not (Test-Path -LiteralPath $Path)) {
+            return
+        }
+
+        $allLines = @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)
+        if ($ProcessedCount.Value -ge $allLines.Count) {
+            return
+        }
+
+        $newLines = @($allLines[$ProcessedCount.Value..($allLines.Count - 1)])
+        $ProcessedCount.Value = $allLines.Count
+
+        foreach ($line in $newLines) {
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+
+            [void]$LineStore.Add([string]$line)
+            & $Context.WriteLog $line $level
+        }
+    }
+
+    $commandLine = '"' + $FilePath + '" ' + $Arguments + ' 1> "' + $stdoutPath + '" 2> "' + $stderrPath + '"'
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $FilePath
-    $psi.Arguments = $Arguments
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
+    $psi.FileName = $env:ComSpec
+    $psi.Arguments = '/d /s /c "' + $commandLine + '"'
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
 
@@ -149,26 +186,21 @@ function Invoke-ToolkitCommand {
     $process.StartInfo = $psi
     [void]$process.Start()
 
+    $lastHeartbeat = Get-Date
     while (-not $process.HasExited) {
+        Receive-ToolkitCommandFileOutput -Path $stdoutPath -ProcessedCount ([ref]$stdoutCount) -Level 'INFO' -LineStore $stdoutLines
+        Receive-ToolkitCommandFileOutput -Path $stderrPath -ProcessedCount ([ref]$stderrCount) -Level 'WARN' -LineStore $stderrLines
         $next = [Math]::Min(($StartPercent + 5), ($EndPercent - 5))
-        if ($next -gt $StartPercent) {
+        if ($next -gt $StartPercent -and ((Get-Date) - $lastHeartbeat).TotalSeconds -ge 8) {
             Invoke-TaskStep -Context $Context -Percent $next -Status "$StepName (running)" -LogMessage "$StepName is still running."
+            $lastHeartbeat = Get-Date
         }
-        Start-Sleep -Milliseconds 700
+        Start-Sleep -Milliseconds 250
     }
 
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $stdoutLines = @()
-    $stderrLines = @()
-    if ($stdout) {
-        $stdoutLines = @($stdout -split "(`r`n|`n|`r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        & $Context.WriteLog $stdout 'INFO'
-    }
-    if ($stderr) {
-        $stderrLines = @($stderr -split "(`r`n|`n|`r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        & $Context.WriteLog $stderr 'WARN'
-    }
+    $process.WaitForExit()
+    Receive-ToolkitCommandFileOutput -Path $stdoutPath -ProcessedCount ([ref]$stdoutCount) -Level 'INFO' -LineStore $stdoutLines
+    Receive-ToolkitCommandFileOutput -Path $stderrPath -ProcessedCount ([ref]$stderrCount) -Level 'WARN' -LineStore $stderrLines
 
     if ($RequireSuccessExitCode -and $process.ExitCode -ne 0) {
         $detailLines = @($stderrLines + $stdoutLines) |
@@ -179,6 +211,7 @@ function Invoke-ToolkitCommand {
     }
 
     Invoke-TaskStep -Context $Context -Percent $EndPercent -Status "$StepName complete" -LogMessage "$StepName finished with exit code $($process.ExitCode)."
+    Remove-Item -LiteralPath $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
 }
 
 function Invoke-ToolkitScriptTask {
