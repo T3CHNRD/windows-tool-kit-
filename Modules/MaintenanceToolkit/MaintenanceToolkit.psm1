@@ -108,6 +108,58 @@ function Invoke-ToolkitTaskById {
     & $task.Handler $Context $task
 }
 
+function Invoke-ToolkitTask {
+    param(
+        [Parameter(Mandatory = $true)]$Task,
+        [scriptblock]$OnProgress,
+        [scriptblock]$OnComplete,
+        [scriptblock]$OnLog
+    )
+
+    $context = New-ToolkitTaskContext `
+        -ReportProgress {
+            param($Percent, $Status)
+            if ($OnProgress) {
+                & $OnProgress $Percent $Status
+            }
+        } `
+        -WriteStatus {
+            param($Status)
+            if ($OnProgress) {
+                & $OnProgress $null $Status
+            }
+        } `
+        -WriteLog {
+            param($Message, $Level)
+            $line = Write-ToolkitLog -Message $Message -Level $Level
+            if ($OnLog) {
+                & $OnLog $line
+            }
+        }
+
+    try {
+        $taskId = if ($Task.PSObject.Properties['Id']) { $Task.Id } else { [string]$Task }
+        Invoke-ToolkitTaskById -TaskId $taskId -Context $context
+        if ($OnComplete) {
+            & $OnComplete ([pscustomobject]@{
+                Outcome = 'SUCCESS'
+                TaskId = $taskId
+                Message = 'Task completed successfully.'
+            })
+        }
+    }
+    catch {
+        if ($OnComplete) {
+            & $OnComplete ([pscustomobject]@{
+                Outcome = 'FAIL'
+                TaskId = if ($Task.PSObject.Properties['Id']) { $Task.Id } else { [string]$Task }
+                Message = $_.Exception.Message
+            })
+        }
+        throw
+    }
+}
+
 function Invoke-TaskStep {
     param(
         [Parameter(Mandatory = $true)]$Context,
@@ -579,6 +631,39 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Security.LocalAccounts'
+            Name = 'Local Accounts and Password Policy Audit'
+            Category = 'Security'
+            Description = 'Reviews local password policy, enabled accounts, Guest-style accounts, and local administrator membership.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-LocalAccountSecurityAudit.ps1' -StepName 'Local account security audit'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.StartupReview'
+            Name = 'Startup Items Review'
+            Category = 'Security'
+            Description = 'Reviews autorun registry keys, startup folders, scheduled tasks, and automatic services for unusual auto-start entries.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-StartupItemsReview.ps1' -StepName 'Startup items review'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.EventReview'
+            Name = 'Security Event Log Review'
+            Category = 'Security'
+            Description = 'Reviews recent Windows security events for failed logons, special privilege logons, account changes, lockouts, and service installs.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-SecurityEventReview.ps1' -StepName 'Security event log review'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Storage.CloneGuide'
             Name = 'Clone Disk Guide'
             Category = 'Storage / Setup'
@@ -748,6 +833,7 @@ Export-ModuleMember -Function @(
     'Write-ToolkitLog',
     'New-ToolkitTaskContext',
     'Get-ToolkitTaskCatalog',
+    'Invoke-ToolkitTask',
     'Invoke-ToolkitTaskById',
     'Invoke-TaskStep',
     'Invoke-ToolkitCommand',

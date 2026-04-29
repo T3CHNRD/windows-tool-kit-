@@ -34,7 +34,7 @@ function Invoke-CheckedAudit {
 }
 
 Write-Output 'Starting Windows security baseline audit.'
-Write-Output 'Scope: local defensive checks only. This does not exploit, attack, or scan third-party systems.'
+Write-Output 'Scope: local defensive checks only. This does not run offensive actions or scan third-party systems.'
 
 Invoke-CheckedAudit -Name 'Microsoft Defender status' -Action {
     if (-not (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue)) {

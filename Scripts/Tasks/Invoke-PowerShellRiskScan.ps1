@@ -13,7 +13,7 @@ $scanRoots = @(
 ) | Where-Object { Test-Path -LiteralPath $_ }
 
 $rules = @(
-    @{ Severity = 'HIGH'; Pattern = '(?i)\bInvoke-Expression\b|\biex\b'; Reason = 'Dynamic code execution can hide malicious behavior or make review harder.' },
+    @{ Severity = 'HIGH'; Pattern = '(?i)\bInvoke-Expression\b|\biex\b'; Reason = 'Dynamic code execution can hide script behavior or make review harder.' },
     @{ Severity = 'HIGH'; Pattern = '(?i)EncodedCommand|FromBase64String'; Reason = 'Encoded commands are commonly used to obscure PowerShell behavior.' },
     @{ Severity = 'HIGH'; Pattern = '(?i)DownloadString|DownloadFile|Invoke-WebRequest|Invoke-RestMethod'; Reason = 'Network download/execution paths should be verified and source-pinned.' },
     @{ Severity = 'MED'; Pattern = '(?i)Set-ExecutionPolicy\s+Bypass|ExecutionPolicy\s+Bypass'; Reason = 'Execution policy bypass may be legitimate in tooling but should be intentional.' },
@@ -23,7 +23,7 @@ $rules = @(
 )
 
 Write-Output 'Starting PowerShell script-risk scan.'
-Write-Output 'Scope: scans toolkit PowerShell files for risky patterns. This is SAST-style review guidance, not proof of compromise.'
+Write-Output 'Scope: scans toolkit PowerShell files for risky patterns. This is SAST-style review guidance, not proof of a security incident.'
 Write-Output ("Scan roots: {0}" -f ($scanRoots -join '; '))
 
 $files = @(Get-ChildItem -Path $scanRoots -Include '*.ps1','*.psm1','*.psd1' -Recurse -File -ErrorAction SilentlyContinue |

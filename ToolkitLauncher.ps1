@@ -115,6 +115,57 @@ $script:CurrentTaskErrorLineCount = 0
 $script:CurrentTaskResult = $null
 $script:CancellationRequested = $false
 $script:IsDarkMode = $false
+$script:IsSimpleMode = $false
+$script:SimpleTasks = @(
+    [pscustomobject]@{
+        TaskId = 'Cleanup.TempFiles'
+        Name = 'Clean Up My Computer'
+        Description = 'Removes temporary junk files that can slow Windows down. Safe cleanup only; personal files are not targeted.'
+        SafetyNote = 'Safe cleanup'
+    },
+    [pscustomobject]@{
+        TaskId = 'Cleanup.FreeSpace'
+        Name = 'Free Up Storage Space'
+        Description = 'Runs C drive cleanup steps and reports what was cleaned so you can recover disk space safely.'
+        SafetyNote = 'Storage helper'
+    },
+    [pscustomobject]@{
+        TaskId = 'Repair.WindowsHealth'
+        Name = 'Fix Windows Problems'
+        Description = 'Runs Microsoft DISM and SFC repair checks to find and repair Windows system file issues.'
+        SafetyNote = 'Microsoft repair checks'
+    },
+    [pscustomobject]@{
+        TaskId = 'Network.Diagnostics'
+        Name = 'Check My Internet'
+        Description = 'Collects network adapter, IP, DNS, and connectivity details to help explain connection problems.'
+        SafetyNote = 'Read-only diagnostics'
+    },
+    [pscustomobject]@{
+        TaskId = 'Network.DhcpRenew'
+        Name = 'Refresh My Network Address'
+        Description = 'Releases and renews your IP address, refreshes DNS registration, and restarts DHCP-related networking where possible.'
+        SafetyNote = 'Network refresh'
+    },
+    [pscustomobject]@{
+        TaskId = 'Update.AllApps'
+        Name = 'Update All My Apps'
+        Description = 'Uses winget to update supported installed apps and logs what completed, skipped, or failed.'
+        SafetyNote = 'App updates'
+    },
+    [pscustomobject]@{
+        TaskId = 'Security.BaselineAudit'
+        Name = 'Check Basic Security'
+        Description = 'Reviews Defender, firewall, BitLocker, Secure Boot, local admins, and update posture for this PC.'
+        SafetyNote = 'Local security review'
+    },
+    [pscustomobject]@{
+        TaskId = 'Integration.Microsoft365'
+        Name = 'Install Microsoft 365'
+        Description = 'Downloads the mallockey/Install-Microsoft365 workflow and launches its installer entry point.'
+        SafetyNote = 'Microsoft 365 deployment'
+    }
+)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "T3CHNRD'S Windows Tool Kit"
@@ -140,11 +191,14 @@ $importScriptMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Impor
 $openLogsMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Open Logs Folder')
 $darkModeMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Dark Mode')
 $darkModeMenuItem.CheckOnClick = $true
+$simpleModeMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Simple Mode')
+$simpleModeMenuItem.CheckOnClick = $true
 $aboutMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('About / Credits')
 $exitMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem('Exit')
 [void]$fileMenu.DropDownItems.Add($importScriptMenuItem)
 [void]$fileMenu.DropDownItems.Add($openLogsMenuItem)
 [void]$fileMenu.DropDownItems.Add($darkModeMenuItem)
+[void]$fileMenu.DropDownItems.Add($simpleModeMenuItem)
 [void]$fileMenu.DropDownItems.Add($aboutMenuItem)
 [void]$fileMenu.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 [void]$fileMenu.DropDownItems.Add($exitMenuItem)
@@ -551,7 +605,7 @@ function Set-ToolkitMenuTheme {
 
     $menuStrip.BackColor = $Palette.Surface
     $menuStrip.ForeColor = $Palette.Text
-    foreach ($menuItem in @($fileMenu, $editMenu, $importScriptMenuItem, $openLogsMenuItem, $darkModeMenuItem, $aboutMenuItem, $exitMenuItem, $editScriptMenuItem)) {
+    foreach ($menuItem in @($fileMenu, $editMenu, $importScriptMenuItem, $openLogsMenuItem, $darkModeMenuItem, $simpleModeMenuItem, $aboutMenuItem, $exitMenuItem, $editScriptMenuItem)) {
         $menuItem.BackColor = $Palette.Surface
         $menuItem.ForeColor = $Palette.Text
         if ($menuItem.DropDown) {
@@ -636,13 +690,40 @@ function Get-CategoryTabLabel {
         'Repair' { 'Repair' }
         'Storage / Setup' { 'Storage' }
         'Update Tools' { 'Updates' }
+        'Simple Mode' { 'Simple' }
         default { $Category }
     }
 }
 
 function Refresh-TaskCatalogState {
-    $script:Tasks = @(Get-ToolkitTaskCatalog | Sort-Object Category, Name)
-    $script:CategoryOrder = @(Get-ToolkitCategoryOrder | Where-Object { $script:Tasks.Category -contains $_ })
+    $allTasks = @(Get-ToolkitTaskCatalog | Sort-Object Category, Name)
+
+    if ($script:IsSimpleMode) {
+        $simpleTaskList = New-Object System.Collections.Generic.List[object]
+        foreach ($simpleTask in $script:SimpleTasks) {
+            $task = $allTasks | Where-Object { $_.Id -eq $simpleTask.TaskId } | Select-Object -First 1
+            if (-not $task) {
+                continue
+            }
+
+            [void]$simpleTaskList.Add([pscustomobject]@{
+                Id = $task.Id
+                Name = $simpleTask.Name
+                Category = 'Simple Mode'
+                Description = ("{0}`r`n`r`nSimple Mode note: {1}" -f $simpleTask.Description, $simpleTask.SafetyNote)
+                RequiresAdmin = $task.RequiresAdmin
+                Handler = $task.Handler
+            })
+        }
+
+        $script:Tasks = @($simpleTaskList)
+        $script:CategoryOrder = @('Simple Mode')
+    }
+    else {
+        $script:Tasks = @($allTasks)
+        $script:CategoryOrder = @(Get-ToolkitCategoryOrder | Where-Object { $script:Tasks.Category -contains $_ })
+    }
+
     $script:TasksByCategory = @{}
 
     foreach ($category in $script:CategoryOrder) {
@@ -673,7 +754,10 @@ function Get-TaskSourcePath {
         'Repair.WindowsHealth'          = 'Scripts\Tasks\Invoke-WindowsRepairChecks.ps1'
         'Security.BaselineAudit'        = 'Scripts\Tasks\Invoke-SecurityBaselineAudit.ps1'
         'Security.DefenderQuickScan'    = 'Scripts\Tasks\Invoke-DefenderQuickScan.ps1'
+        'Security.EventReview'          = 'Scripts\Tasks\Invoke-SecurityEventReview.ps1'
+        'Security.LocalAccounts'        = 'Scripts\Tasks\Invoke-LocalAccountSecurityAudit.ps1'
         'Security.OpenPortsAudit'       = 'Scripts\Tasks\Invoke-OpenPortsAudit.ps1'
+        'Security.StartupReview'        = 'Scripts\Tasks\Invoke-StartupItemsReview.ps1'
         'Security.PowerShellRiskScan'   = 'Scripts\Tasks\Invoke-PowerShellRiskScan.ps1'
         'Update.AllApps'                = 'Scripts\Tasks\Invoke-UpdateAllApps.ps1'
         'Update.VendorBIOS'             = 'Scripts\Tasks\Invoke-BiosUpdate.ps1'
@@ -1586,6 +1670,7 @@ function Set-InteractiveState {
     $importScriptMenuItem.Enabled = $Enabled
     $editScriptMenuItem.Enabled = $Enabled
     $openLogsMenuItem.Enabled = $Enabled
+    $simpleModeMenuItem.Enabled = $Enabled
     $cancelButton.Enabled = (-not $Enabled)
     foreach ($category in $script:TaskListsByCategory.Keys) {
         $script:TaskListsByCategory[$category].Enabled = $Enabled
@@ -1824,6 +1909,28 @@ $darkModeMenuItem.Add_Click({
     $script:IsDarkMode = [bool]$darkModeMenuItem.Checked
     Apply-ToolkitTheme
     Add-UiLogLine -Line ("Dark mode {0}." -f $(if ($script:IsDarkMode) { 'enabled' } else { 'disabled' }))
+})
+$simpleModeMenuItem.Add_Click({
+    if (Test-TaskIsRunning) {
+        $simpleModeMenuItem.Checked = $script:IsSimpleMode
+        [System.Windows.Forms.MessageBox]::Show(
+            'Wait for the running task to finish before switching modes.',
+            'Toolkit',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    $script:IsSimpleMode = [bool]$simpleModeMenuItem.Checked
+    $subLabel.Text = if ($script:IsSimpleMode) {
+        'Simple mode: common maintenance tasks with plain-language names'
+    }
+    else {
+        'Unified repair, cleanup, update, deployment, diagnostics, and imported script runner'
+    }
+    Refresh-TaskTabs
+    Add-UiLogLine -Line ("{0} mode enabled." -f $(if ($script:IsSimpleMode) { 'Simple' } else { 'IT Pro' }))
 })
 $exitMenuItem.Add_Click({ $form.Close() })
 $editScriptMenuItem.Add_Click({ Edit-SelectedScript })
