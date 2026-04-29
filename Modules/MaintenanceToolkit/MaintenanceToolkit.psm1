@@ -116,17 +116,21 @@ function Invoke-ToolkitTask {
         [scriptblock]$OnLog
     )
 
+    $progressState = [pscustomobject]@{ LastPercent = 0 }
     $context = New-ToolkitTaskContext `
         -ReportProgress {
             param($Percent, $Status)
+            if ($null -ne $Percent) {
+                $progressState.LastPercent = [int]$Percent
+            }
             if ($OnProgress) {
-                & $OnProgress $Percent $Status
+                & $OnProgress $progressState.LastPercent $Status
             }
         } `
         -WriteStatus {
             param($Status)
             if ($OnProgress) {
-                & $OnProgress $null $Status
+                & $OnProgress $progressState.LastPercent $Status
             }
         } `
         -WriteLog {
@@ -141,20 +145,12 @@ function Invoke-ToolkitTask {
         $taskId = if ($Task.PSObject.Properties['Id']) { $Task.Id } else { [string]$Task }
         Invoke-ToolkitTaskById -TaskId $taskId -Context $context
         if ($OnComplete) {
-            & $OnComplete ([pscustomobject]@{
-                Outcome = 'SUCCESS'
-                TaskId = $taskId
-                Message = 'Task completed successfully.'
-            })
+            & $OnComplete $true 'Task completed successfully.'
         }
     }
     catch {
         if ($OnComplete) {
-            & $OnComplete ([pscustomobject]@{
-                Outcome = 'FAIL'
-                TaskId = if ($Task.PSObject.Properties['Id']) { $Task.Id } else { [string]$Task }
-                Message = $_.Exception.Message
-            })
+            & $OnComplete $false $_.Exception.Message
         }
         throw
     }
