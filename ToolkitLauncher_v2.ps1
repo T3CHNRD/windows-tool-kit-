@@ -320,7 +320,7 @@ $modeSubLabel.Location = New-Object System.Drawing.Point(57, 33)
 # ── Mode Toggle Button ────────────────────────────────────────
 $modeToggleBtn         = New-Object System.Windows.Forms.Button
 $modeToggleBtn.Text    = '🙂  Switch to Simple Mode'
-$modeToggleBtn.Font    = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+$modeToggleBtn.Font    = New-Object System.Drawing.Font('Segoe UI Emoji', 10, [System.Drawing.FontStyle]::Bold)
 $modeToggleBtn.ForeColor = [System.Drawing.Color]::White
 $modeToggleBtn.BackColor = [System.Drawing.Color]::FromArgb(79, 142, 247)
 $modeToggleBtn.FlatStyle = 'Flat'
@@ -348,6 +348,8 @@ $bodySplit                    = New-Object System.Windows.Forms.SplitContainer
 $bodySplit.Dock               = 'Fill'
 $bodySplit.FixedPanel         = 'Panel1'
 $bodySplit.SplitterDistance   = 210
+$bodySplit.Panel1MinSize      = 180
+$bodySplit.Panel2MinSize      = 760
 $bodySplit.BackColor          = [System.Drawing.Color]::FromArgb(30, 36, 52)
 [void]$rootPanel.Controls.Add($bodySplit, 0, 1)
 
@@ -368,7 +370,7 @@ $sidebarLayout.RowCount    = 2
 # Search box
 $searchBox             = New-Object System.Windows.Forms.TextBox
 $searchBox.Dock        = 'Fill'
-$searchBox.Font        = New-Object System.Drawing.Font('Segoe UI', 10)
+$searchBox.Font        = New-Object System.Drawing.Font('Segoe UI Emoji', 10)
 $searchBox.BackColor   = [System.Drawing.Color]::FromArgb(24, 28, 40)
 $searchBox.ForeColor   = [System.Drawing.Color]::FromArgb(139, 149, 173)
 $searchBox.BorderStyle = 'FixedSingle'
@@ -385,7 +387,7 @@ $navList.Dock          = 'Fill'
 $navList.BorderStyle   = 'None'
 $navList.BackColor     = [System.Drawing.Color]::FromArgb(18, 21, 29)
 $navList.ForeColor     = [System.Drawing.Color]::FromArgb(139, 149, 173)
-$navList.Font          = New-Object System.Drawing.Font('Segoe UI', 10)
+$navList.Font          = New-Object System.Drawing.Font('Segoe UI Emoji', 10)
 $navList.ItemHeight    = 34
 $navList.DrawMode      = 'OwnerDrawFixed'
 [void]$sidebarLayout.Controls.Add($navList, 0, 1)
@@ -395,6 +397,8 @@ $mainSplit                  = New-Object System.Windows.Forms.SplitContainer
 $mainSplit.Dock             = 'Fill'
 $mainSplit.FixedPanel       = 'Panel2'
 $mainSplit.SplitterDistance = 700
+$mainSplit.Panel1MinSize    = 520
+$mainSplit.Panel2MinSize    = 360
 $mainSplit.BackColor        = [System.Drawing.Color]::FromArgb(30, 36, 52)
 [void]$bodySplit.Panel2.Controls.Add($mainSplit)
 
@@ -629,7 +633,7 @@ $simpleStatusPanel.Visible   = $false
 
 $simpleIconLabel       = New-Object System.Windows.Forms.Label
 $simpleIconLabel.Text  = '✅'
-$simpleIconLabel.Font  = New-Object System.Drawing.Font('Segoe UI', 28)
+$simpleIconLabel.Font  = New-Object System.Drawing.Font('Segoe UI Emoji', 28)
 $simpleIconLabel.AutoSize   = $true
 $simpleIconLabel.TextAlign  = 'MiddleCenter'
 [void]$simpleStatusPanel.Controls.Add($simpleIconLabel)
@@ -723,7 +727,7 @@ $navList.Add_DrawItem({
         $fgColor = if ($isSelected) { $pal.Text } else { $pal.TextMid }
         $brush   = New-Object System.Drawing.SolidBrush($fgColor)
         $navFontStyle = if ($isSelected) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
-        $font    = New-Object System.Drawing.Font('Segoe UI', 10, $navFontStyle)
+        $font    = New-Object System.Drawing.Font('Segoe UI Emoji', 10, $navFontStyle)
         $sf      = New-Object System.Drawing.StringFormat
         $sf.LineAlignment = 'Center'
         $e.Graphics.DrawString($itemData.Text, $font, $brush,
@@ -783,7 +787,7 @@ function New-ToolCard {
     $iconLbl               = New-Object System.Windows.Forms.Label
     $iconLbl.Text          = $Icon
     $iconFontSize          = if ($isSimple) { 22 } else { 16 }
-    $iconLbl.Font          = New-Object System.Drawing.Font('Segoe UI', $iconFontSize)
+    $iconLbl.Font          = New-Object System.Drawing.Font('Segoe UI Emoji', $iconFontSize)
     $iconLbl.AutoSize      = $true
     $iconLbl.Location      = New-Object System.Drawing.Point(10, 8)
     [void]$card.Controls.Add($iconLbl)
@@ -1177,6 +1181,7 @@ $modeToggleBtn.Add_Click({
     $script:SelectedTask = $null
     $simpleStatusPanel.Visible = $false
     Apply-Mode
+    Apply-ResponsiveLayout
 })
 
 # ============================================================
@@ -1227,6 +1232,48 @@ function Get-CategoryTabLabel {
     }
 }
 
+function Apply-ResponsiveLayout {
+    if ($bodySplit.Width -le 0 -or $mainSplit.Width -le 0) { return }
+
+    try {
+        $sidebarWidth = if ($script:IsSimpleMode) { 170 } else { 210 }
+        $bodySplit.Panel1MinSize = 140
+        $bodySplit.Panel2MinSize = 620
+        $maxSidebar = [Math]::Max(140, $bodySplit.Width - $bodySplit.Panel2MinSize - 8)
+        $bodySplit.SplitterDistance = [int]([Math]::Min($sidebarWidth, $maxSidebar))
+    }
+    catch {}
+
+    try {
+        $available = [int]$mainSplit.Width
+        if ($available -le 0) { return }
+
+        $desiredRight = if ($script:IsSimpleMode) { 350 } else { 390 }
+        $minLeft = 460
+        $minRight = 320
+
+        if ($available -lt ($minLeft + $minRight + 16)) {
+            $desiredRight = [Math]::Max(260, [Math]::Floor($available * 0.36))
+            $minLeft = [Math]::Max(260, $available - $desiredRight - 8)
+            $minRight = [Math]::Max(220, $desiredRight)
+        }
+
+        $mainSplit.Panel1MinSize = [int]$minLeft
+        $mainSplit.Panel2MinSize = [int]$minRight
+
+        $splitterDistance = $available - $desiredRight
+        $maxDistance = $available - $mainSplit.Panel2MinSize - 6
+        $splitterDistance = [Math]::Max($mainSplit.Panel1MinSize, [Math]::Min($splitterDistance, $maxDistance))
+
+        if ($splitterDistance -gt 0 -and $splitterDistance -lt $available) {
+            $mainSplit.SplitterDistance = [int]$splitterDistance
+        }
+    }
+    catch {}
+
+    $toolDescLabel.MaximumSize = New-Object System.Drawing.Size(([Math]::Max(260, $toolHeader.Width - 32)), 0)
+}
+
 # ============================================================
 #  SECTION 15 — CLOCK & KEYBOARD
 # ============================================================
@@ -1255,10 +1302,15 @@ $form.Add_KeyDown({
 $form.Add_Shown({
     Refresh-TaskCatalog
     Apply-Mode   # Start in Pro mode
+    Apply-ResponsiveLayout
     Add-LogLine 'T3CHNRD Windows Tool Kit v2 initialized.'
     Add-LogLine "Loaded $($script:Tasks.Count) tasks across $($script:CategoryOrder.Count) categories."
     Add-LogLine 'Running as Administrator: OK'
     Add-LogLine 'Use the mode toggle (top right) to switch to Simple Mode.'
+})
+
+$form.Add_Resize({
+    Apply-ResponsiveLayout
 })
 
 $form.Add_FormClosing({
