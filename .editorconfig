@@ -1,0 +1,14 @@
+root = true
+
+# FIX: LOW-07 - keep PowerShell/script formatting stable across editors.
+[*.{ps1,psm1,psd1}]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+charset = utf-8-bom
+
+[*.md]
+indent_style = space
+indent_size = 2
+end_of_line = crlf
+charset = utf-8

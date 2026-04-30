@@ -23,7 +23,11 @@ param(
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+# FIX: CRITICAL-03 - keep WinForms event/paint/timer warnings from becoming app-killing exceptions.
+$ErrorActionPreference = 'Continue'
+
+# FIX: CRITICAL-01 - capture the script invocation at script scope before helper functions run.
+$script:ScriptInvocation = $MyInvocation
 
 # ============================================================
 #  SECTION 1 — ELEVATION (unchanged from your original)
@@ -36,18 +40,40 @@ function Test-LauncherIsAdmin {
 }
 
 function Get-LauncherCommandPath {
-    $commandInfo = $MyInvocation.MyCommand
+    # FIX: CRITICAL-01 - use the launcher invocation, not this function's invocation scope.
+    $commandInfo = $script:ScriptInvocation.MyCommand
     if ($commandInfo -and $commandInfo.PSObject.Properties['Path']) {
         $commandPath = $commandInfo.Path
         if ($commandPath) { return $commandPath }
     }
+
     $commandLineArgs = [Environment]::GetCommandLineArgs()
     if ($commandLineArgs.Count -gt 0) {
-        $processPath = $commandLineArgs[0]
-        if ($processPath -and (Test-Path -LiteralPath $processPath)) {
-            return (Get-Item -LiteralPath $processPath).FullName
+        foreach ($arg in $commandLineArgs) {
+            if (-not $arg) { continue }
+            $candidate = $arg.Trim('"')
+            if (-not (Test-Path -LiteralPath $candidate)) { continue }
+            $item = Get-Item -LiteralPath $candidate -ErrorAction SilentlyContinue
+            if (-not $item) { continue }
+
+            $extension = [IO.Path]::GetExtension($item.FullName)
+            $fileName = [IO.Path]::GetFileNameWithoutExtension($item.FullName)
+            if ($extension -ieq '.ps1' -or ($extension -ieq '.exe' -and $fileName -notmatch '^(powershell|pwsh)$')) {
+                return $item.FullName
+            }
         }
     }
+
+    # FIX: MED-19 - PS2EXE can run from the extracted EXE path while $PSScriptRoot points elsewhere.
+    try {
+        $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        $exeName = [IO.Path]::GetFileNameWithoutExtension($exePath)
+        if ($exePath -and (Test-Path -LiteralPath $exePath) -and $exeName -notmatch '^(powershell|pwsh)$') {
+            return (Get-Item -LiteralPath $exePath).FullName
+        }
+    }
+    catch {}
+
     return $null
 }
 
@@ -68,8 +94,11 @@ function Restart-LauncherElevated {
     if ([IO.Path]::GetExtension($commandPath) -eq '.exe') {
         $startInfo.FileName = $commandPath
     } else {
+        # FIX: CRITICAL-02 - relaunch through -Command with single-quote escaping for paths with spaces/special chars.
+        $escapedPath = $commandPath -replace "'", "''"
+        $escapedRoot = $ToolkitRoot -replace "'", "''"
         $startInfo.FileName  = 'powershell.exe'
-        $startInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$commandPath`" -ElevatedRelaunch"
+        $startInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"Set-Location -LiteralPath '$escapedRoot'; & '$escapedPath' -ElevatedRelaunch`""
     }
     [void][System.Diagnostics.Process]::Start($startInfo)
 }
@@ -108,7 +137,7 @@ if (-not (Test-Path -LiteralPath $modulePath)) {
 }
 
 try {
-    Import-Module $modulePath -Force
+    Import-Module $modulePath -Force -ErrorAction Stop
 }
 catch {
     [System.Windows.Forms.MessageBox]::Show(
@@ -122,7 +151,7 @@ catch {
 
 $hardwareModulePath = Join-Path $toolkitRoot 'Modules\HardwareDiagnostics\HardwareDiagnostics.psm1'
 if (Test-Path -LiteralPath $hardwareModulePath) {
-    Import-Module $hardwareModulePath -Force
+    Import-Module $hardwareModulePath -Force -ErrorAction Stop
 }
 
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -145,6 +174,12 @@ $script:DebloatInventory        = @()
 $script:WindowsUpdateSkipSel    = @()
 $script:WindowsUpdateInventory  = @()
 $script:TaskListsByCategory     = @{}
+
+# FIX: CRITICAL-04 - pre-create reusable GDI resources and dispose them on form close.
+$script:CardBorderPen           = New-Object System.Drawing.Pen(([System.Drawing.Color]::FromArgb(30, 36, 52)), 1)
+
+# FIX: HIGH-04 - mirror launcher UI log messages to disk so crashes do not lose context.
+$script:UiLogPath               = Join-Path (Join-Path $toolkitRoot 'Logs') ("Toolkit-UI-{0:yyyyMMdd}.log" -f (Get-Date))
 
 # ============================================================
 #  SECTION 4 — SIMPLE MODE TASK MAP
@@ -741,7 +776,9 @@ $navList.Add_DrawItem({
 # ============================================================
 
 function Refresh-TaskCatalog {
-    $script:Tasks         = @(Get-ToolkitTaskCatalog | Sort-Object Category, Name)
+    # FIX: HIGH-01 - do not turn a null catalog into an array containing a null task.
+    $rawTasks = Get-ToolkitTaskCatalog
+    $script:Tasks         = if ($rawTasks) { @($rawTasks | Where-Object { $_ } | Sort-Object Category, Name) } else { @() }
     $script:CategoryOrder = @(Get-ToolkitCategoryOrder | Where-Object { $script:Tasks.Category -contains $_ })
     $script:TasksByCategory = @{}
     foreach ($cat in $script:CategoryOrder) {
@@ -774,13 +811,17 @@ function New-ToolCard {
     # Border effect via Paint
     $card.Add_Paint({
         param($s, $pe)
-        $paintControl = if ($s -is [array]) { $s[0] } else { $s }
-        $paintWidth = [int]$paintControl.ClientSize.Width
-        $paintHeight = [int]$paintControl.ClientSize.Height
-        if ($paintWidth -le 1 -or $paintHeight -le 1) { return }
-        $p = New-Object System.Drawing.Pen(([System.Drawing.Color]::FromArgb(30, 36, 52)), 1)
-        $pe.Graphics.DrawRectangle($p, 0, 0, ($paintWidth - 1), ($paintHeight - 1))
-        $p.Dispose()
+        try {
+            # FIX: CRITICAL-04 - use a reusable pen and cast dimensions before arithmetic.
+            $paintControl = if ($s -is [array]) { $s[0] } else { $s }
+            $paintWidth = [int]$paintControl.ClientSize.Width
+            $paintHeight = [int]$paintControl.ClientSize.Height
+            if ($paintWidth -le 1 -or $paintHeight -le 1) { return }
+            $pe.Graphics.DrawRectangle($script:CardBorderPen, 0, 0, ($paintWidth - 1), ($paintHeight - 1))
+        }
+        catch {
+            Add-LogLine "Card paint skipped: $($_.Exception.Message)"
+        }
     })
 
     # Icon
@@ -975,7 +1016,20 @@ function Add-LogLine {
     param([string]$Line)
     if ([string]::IsNullOrWhiteSpace($Line)) { return }
     $ts = "[{0:HH:mm:ss}] {1}" -f (Get-Date), $Line
-    $logBox.AppendText($ts + [Environment]::NewLine)
+    try {
+        $logBox.AppendText($ts + [Environment]::NewLine)
+    }
+    catch {}
+
+    # FIX: HIGH-04 - persist launcher messages to Logs\Toolkit-UI-yyyyMMdd.log.
+    try {
+        $logDir = Split-Path -Parent $script:UiLogPath
+        if (-not (Test-Path -LiteralPath $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        }
+        Add-Content -LiteralPath $script:UiLogPath -Value $ts -Encoding UTF8
+    }
+    catch {}
 }
 
 # ============================================================
@@ -989,7 +1043,14 @@ function Test-TaskRunning {
 
 function Stop-TaskProcessTree {
     if (-not $script:CurrentTaskProcess) { return }
-    try { & taskkill.exe /PID $script:CurrentTaskProcess.Id /T /F | Out-Null } catch {}
+    # FIX: CRITICAL-05 - log taskkill success/failure instead of swallowing cancellation errors.
+    try {
+        $result = & taskkill.exe /PID $script:CurrentTaskProcess.Id /T /F 2>&1
+        Add-LogLine "Cancel: taskkill result: $($result -join ' ')"
+    }
+    catch {
+        Add-LogLine "Cancel: taskkill failed - $($_.Exception.Message)"
+    }
 }
 
 function Set-Progress {
@@ -1281,17 +1342,29 @@ function Apply-ResponsiveLayout {
 $clockTimer          = New-Object System.Windows.Forms.Timer
 $clockTimer.Interval = 1000
 $clockTimer.Add_Tick({
-    $clockLabel.Text = (Get-Date).ToString('HH:mm:ss')
+    try {
+        # FIX: CRITICAL-03 - timer events must never surface as unhandled WinForms exceptions.
+        $clockLabel.Text = (Get-Date).ToString('HH:mm:ss')
+    }
+    catch {
+        Add-LogLine "Clock update skipped: $($_.Exception.Message)"
+    }
 })
 $clockTimer.Start()
 
 $form.Add_KeyDown({
     param($s, $e)
-    if ($e.KeyCode -eq 'F5' -and $script:SelectedTask -and -not (Test-TaskRunning)) {
-        $runBtn.PerformClick()
+    try {
+        # FIX: HIGH-15 - F5 rerun and Esc cancel are explicitly wired.
+        if ($e.KeyCode -eq 'F5' -and $script:SelectedTask -and -not (Test-TaskRunning)) {
+            $runBtn.PerformClick()
+        }
+        if ($e.KeyCode -eq 'Escape' -and (Test-TaskRunning)) {
+            $cancelBtn.PerformClick()
+        }
     }
-    if ($e.KeyCode -eq 'Escape' -and (Test-TaskRunning)) {
-        $cancelBtn.PerformClick()
+    catch {
+        Add-LogLine "Keyboard shortcut skipped: $($_.Exception.Message)"
     }
 })
 
@@ -1300,22 +1373,41 @@ $form.Add_KeyDown({
 # ============================================================
 
 $form.Add_Shown({
-    Refresh-TaskCatalog
-    Apply-Mode   # Start in Pro mode
-    Apply-ResponsiveLayout
-    Add-LogLine 'T3CHNRD Windows Tool Kit v2 initialized.'
-    Add-LogLine "Loaded $($script:Tasks.Count) tasks across $($script:CategoryOrder.Count) categories."
-    Add-LogLine 'Running as Administrator: OK'
-    Add-LogLine 'Use the mode toggle (top right) to switch to Simple Mode.'
+    try {
+        # FIX: HIGH-09 - theme/mode is applied at startup, not only after the first toggle.
+        Refresh-TaskCatalog
+        Apply-Mode   # Start in Pro mode
+        Apply-ResponsiveLayout
+        Add-LogLine 'T3CHNRD Windows Tool Kit v2 initialized.'
+        Add-LogLine "Loaded $($script:Tasks.Count) tasks across $($script:CategoryOrder.Count) categories."
+        Add-LogLine 'Running as Administrator: OK'
+        Add-LogLine 'Use the mode toggle (top right) to switch to Simple Mode.'
+    }
+    catch {
+        Add-LogLine "Startup UI initialization failed: $($_.Exception.Message)"
+    }
 })
 
 $form.Add_Resize({
-    Apply-ResponsiveLayout
+    try {
+        # FIX: CRITICAL-03 - resize/layout errors should be logged, not crash the form.
+        Apply-ResponsiveLayout
+    }
+    catch {
+        Add-LogLine "Resize layout skipped: $($_.Exception.Message)"
+    }
 })
 
 $form.Add_FormClosing({
-    $clockTimer.Stop()
+    # FIX: LOW-14 - stop/dispose timers and GDI resources during shutdown.
+    try { $clockTimer.Stop(); $clockTimer.Dispose() } catch {}
     Stop-TaskProcessTree
+    try {
+        if ($script:CardBorderPen) {
+            $script:CardBorderPen.Dispose()
+        }
+    }
+    catch {}
 })
 
 [void]$form.ShowDialog()

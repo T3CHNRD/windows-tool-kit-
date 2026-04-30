@@ -27,7 +27,8 @@ foreach ($target in $targets) {
         }
 
         try {
-            Remove-Item -LiteralPath $itemPath -Recurse -Force -ErrorAction Stop
+            # FIX: MED-01 - locked temp files are expected; skip them without failing the cleanup.
+            Remove-Item -LiteralPath $itemPath -Recurse -Force -ErrorAction SilentlyContinue
         }
         catch {
             Write-Output "Could not remove: $itemPath - $($_.Exception.Message)"

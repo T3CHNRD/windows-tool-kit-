@@ -37,7 +37,6 @@ $copyItems = @(
     'Docs',
     'Integrations',
     'LegacyScripts',
-    'Logs',
     'Modules',
     'Scripts',
     'ToolkitLauncher.ps1',
@@ -51,6 +50,10 @@ foreach ($item in $copyItems) {
         Copy-Item -Path $source -Destination (Join-Path $appRoot $item) -Recurse -Force
     }
 }
+
+# FIX: MED-17 - ship an empty Logs folder, not developer/user log history.
+New-Item -Path (Join-Path $appRoot 'Logs') -ItemType Directory -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $appRoot 'Logs\.gitkeep') -Value '' -Encoding UTF8
 
 if (-not (Get-Module -ListAvailable -Name ps2exe)) {
     Write-Host 'Installing ps2exe module (CurrentUser)...'

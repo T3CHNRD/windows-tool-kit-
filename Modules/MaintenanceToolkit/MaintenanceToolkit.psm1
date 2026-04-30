@@ -25,13 +25,11 @@ function Get-ToolkitRoot {
 }
 
 function Get-ToolkitSettings {
-    $settingsPath = Join-Path (Get-ToolkitRoot) 'Config\Toolkit.Settings.psd1'
-    if (Test-Path $settingsPath) {
-        return Import-PowerShellDataFile -Path $settingsPath
-    }
-
-    return @{
+    # FIX: HIGH-02 / MED-20 - always return a validated settings object with safe defaults.
+    $defaults = @{
         LogRoot = 'Logs'
+        MaxLogAgeDays = 30
+        DefaultTheme = 'Dark'
         Integrations = @{
             Microsoft365RepoZip = 'https://github.com/mallockey/Install-Microsoft365/archive/refs/heads/main.zip'
             WindowsMediaSupportPage = 'https://support.microsoft.com/en-us/windows/create-installation-media-for-windows-99a58364-8c02-206f-aa6f-40c3b507420d'
@@ -42,6 +40,40 @@ function Get-ToolkitSettings {
             FrameworkBiosDriversPage = 'https://knowledgebase.frame.work/bios-and-drivers-downloads-rJ3PaCexh'
         }
     }
+
+    $settingsPath = Join-Path (Get-ToolkitRoot) 'Config\Toolkit.Settings.psd1'
+    if (Test-Path $settingsPath) {
+        try {
+            $settings = Import-PowerShellDataFile -Path $settingsPath -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Toolkit settings could not be loaded. Defaults will be used. $($_.Exception.Message)"
+            return $defaults
+        }
+
+        foreach ($key in $defaults.Keys) {
+            if (-not $settings.ContainsKey($key) -or $null -eq $settings[$key]) {
+                $settings[$key] = $defaults[$key]
+            }
+        }
+
+        foreach ($nestedKey in @('Integrations', 'UpdateTools')) {
+            if (-not ($settings[$nestedKey] -is [hashtable])) {
+                $settings[$nestedKey] = $defaults[$nestedKey]
+                continue
+            }
+
+            foreach ($childKey in $defaults[$nestedKey].Keys) {
+                if (-not $settings[$nestedKey].ContainsKey($childKey) -or $null -eq $settings[$nestedKey][$childKey]) {
+                    $settings[$nestedKey][$childKey] = $defaults[$nestedKey][$childKey]
+                }
+            }
+        }
+
+        return $settings
+    }
+
+    return $defaults
 }
 
 function Test-ToolkitIsAdmin {

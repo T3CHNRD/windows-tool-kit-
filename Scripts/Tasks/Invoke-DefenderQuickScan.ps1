@@ -12,7 +12,12 @@ if (-not (Get-Command Start-MpScan -ErrorAction SilentlyContinue)) {
 }
 
 if (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue) {
-    $before = Get-MpComputerStatus
+    # FIX: MED-09 - report and skip cleanly when Defender is disabled or replaced by third-party AV.
+    $before = Get-MpComputerStatus -ErrorAction SilentlyContinue
+    if (-not $before -or -not $before.AntivirusEnabled) {
+        Write-Output 'Microsoft Defender Antivirus is not active on this system. Quick scan skipped.'
+        exit 0
+    }
     Write-Output "Before scan: RealTimeProtectionEnabled=$($before.RealTimeProtectionEnabled), AntivirusSignatureAge=$($before.AntivirusSignatureAge), QuickScanAge=$($before.QuickScanAge)"
 }
 

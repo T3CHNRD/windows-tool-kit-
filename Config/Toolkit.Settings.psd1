@@ -1,5 +1,8 @@
 @{
     LogRoot = 'Logs'
+    # FIX: MED-20 / MED-21 - declare settings expected by loader and future preference persistence.
+    MaxLogAgeDays = 30
+    DefaultTheme = 'Dark'
 
     Integrations = @{
         Microsoft365RepoZip = 'https://github.com/mallockey/Install-Microsoft365/archive/refs/heads/main.zip'

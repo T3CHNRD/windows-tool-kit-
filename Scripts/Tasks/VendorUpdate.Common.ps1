@@ -150,10 +150,16 @@ function Ensure-PowerShellGalleryModule {
 }
 
 function Get-DellCommandUpdateCliPath {
-    return (Resolve-FirstExistingPath -Candidates @(
+    # FIX: MED-10 - dynamically discover Dell Command Update when versioned install paths change.
+    $knownPath = Resolve-FirstExistingPath -Candidates @(
         'C:\Program Files\Dell\CommandUpdate\dcu-cli.exe',
         'C:\Program Files (x86)\Dell\CommandUpdate\dcu-cli.exe'
-    ))
+    )
+    if ($knownPath) { return $knownPath }
+
+    $discovered = Get-ChildItem -Path 'C:\Program Files', 'C:\Program Files (x86)' -Filter 'dcu-cli.exe' -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
+    return $discovered
 }
 
 function Ensure-HpImageAssistantPath {
@@ -189,10 +195,17 @@ function Ensure-HpImageAssistantPath {
 }
 
 function Get-LenovoSystemUpdatePath {
-    return (Resolve-FirstExistingPath -Candidates @(
+    # FIX: MED-10 - dynamically discover Lenovo System Update across versioned install paths.
+    $knownPath = Resolve-FirstExistingPath -Candidates @(
         'C:\Program Files (x86)\Lenovo\System Update\tvsu.exe',
         'C:\Program Files\Lenovo\System Update\tvsu.exe'
-    ))
+    )
+    if ($knownPath) { return $knownPath }
+
+    $discovered = Get-ChildItem -Path 'C:\Program Files', 'C:\Program Files (x86)' -Filter 'tvsu.exe' -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match 'Lenovo' } |
+        Select-Object -First 1 -ExpandProperty FullName
+    return $discovered
 }
 
 function Invoke-DellVendorUpdates {

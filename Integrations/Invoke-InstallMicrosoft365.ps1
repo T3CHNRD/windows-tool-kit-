@@ -13,17 +13,18 @@ $targetRoot = Join-Path $toolkitRoot 'Integrations\Install-Microsoft365'
 $installerDownloadPath = Join-Path $targetRoot 'OfficeDeploymentTool'
 $zipPath = Join-Path $env:TEMP ("Install-Microsoft365-{0}.zip" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 
-Write-Host "Downloading Install-Microsoft365 from $downloadUrl"
+# FIX: MED-15 - use the maintained mallockey workflow repo instead of a hardcoded ODT binary URL.
+Write-Output "Downloading Install-Microsoft365 from $downloadUrl"
 Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
-Write-Host "Downloaded workflow archive to $zipPath"
+Write-Output "Downloaded workflow archive to $zipPath"
 
 if (Test-Path $targetRoot) {
-    Write-Host "Removing previous workflow copy from $targetRoot"
+    Write-Output "Removing previous workflow copy from $targetRoot"
     Remove-Item -Path $targetRoot -Recurse -Force
 }
 New-Item -Path $targetRoot -ItemType Directory -Force | Out-Null
 
-Write-Host "Extracting Install-Microsoft365 workflow to $targetRoot"
+Write-Output "Extracting Install-Microsoft365 workflow to $targetRoot"
 Expand-Archive -Path $zipPath -DestinationPath $targetRoot -Force
 Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
 
@@ -36,9 +37,9 @@ if (-not $candidateScript) {
 
 New-Item -Path $installerDownloadPath -ItemType Directory -Force | Out-Null
 
-Write-Host "Launching installer script in a visible PowerShell window: $($candidateScript.FullName)"
-Write-Host "Office Deployment Tool download/work folder: $installerDownloadPath"
-Write-Host 'The visible Install-Microsoft365 window is the mallockey workflow. Use that window for prompts and install progress.'
+Write-Output "Launching installer script in a visible PowerShell window: $($candidateScript.FullName)"
+Write-Output "Office Deployment Tool download/work folder: $installerDownloadPath"
+Write-Output 'The visible Install-Microsoft365 window is the mallockey workflow. Use that window for prompts and install progress.'
 $arguments = @(
     '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
@@ -49,7 +50,7 @@ $arguments = @(
 ) -join ' '
 
 $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Wait -PassThru -WindowStyle Normal
-Write-Host "Install-Microsoft365 workflow process exited with code $($process.ExitCode)."
+Write-Output "Install-Microsoft365 workflow process exited with code $($process.ExitCode)."
 if ($process.ExitCode -ne 0) {
     throw "Install-Microsoft365 workflow exited with code $($process.ExitCode)."
 }

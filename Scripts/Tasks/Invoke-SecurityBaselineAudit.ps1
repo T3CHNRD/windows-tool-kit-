@@ -4,6 +4,13 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$toolkitRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$logDir = Join-Path $toolkitRoot 'Logs'
+if (-not (Test-Path -LiteralPath $logDir)) {
+    New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+}
+$reportPath = Join-Path $logDir ("SecurityAudit-{0}-{1}.txt" -f $env:COMPUTERNAME, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+
 function Write-Finding {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -35,6 +42,17 @@ function Invoke-CheckedAudit {
 
 Write-Output 'Starting Windows security baseline audit.'
 Write-Output 'Scope: local defensive checks only. This does not run offensive actions or scan third-party systems.'
+Write-Output "Report file: $reportPath"
+
+# FIX: MED-06 - keep a persistent security audit report in Logs/.
+$transcriptStarted = $false
+try {
+    Start-Transcript -Path $reportPath -Force | Out-Null
+    $transcriptStarted = $true
+}
+catch {
+    Write-Output "Could not start transcript report. Continuing with console output only: $($_.Exception.Message)"
+}
 
 Invoke-CheckedAudit -Name 'Microsoft Defender status' -Action {
     if (-not (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue)) {
@@ -123,3 +141,7 @@ Invoke-CheckedAudit -Name 'Listening ports summary' -Action {
 }
 
 Write-Output 'Windows security baseline audit complete.'
+if ($transcriptStarted) {
+    Stop-Transcript | Out-Null
+    Write-Output "Security baseline report saved to: $reportPath"
+}

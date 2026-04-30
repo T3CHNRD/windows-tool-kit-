@@ -57,21 +57,55 @@ function Invoke-NativeDhcpCommand {
 
 Write-Output 'Starting IP release/renew and DHCP reset workflow.'
 
+$primaryAdapter = $null
+try {
+    # FIX: MED-12 - target the primary route instead of releasing every adapter at once.
+    $primaryAdapter = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+        Sort-Object RouteMetric, InterfaceMetric |
+        Select-Object -First 1 -ExpandProperty InterfaceAlias)
+    if ($primaryAdapter) {
+        Write-Output "Primary network adapter detected: $primaryAdapter"
+    }
+}
+catch {
+    Write-Output "Could not detect a primary adapter. Falling back to ipconfig default behavior: $($_.Exception.Message)"
+}
+
+$isStaticPrimary = $false
+if ($primaryAdapter) {
+    try {
+        # FIX: MED-05 - do not force DHCP renew on a static-IP primary adapter.
+        $primaryConfig = Get-NetIPConfiguration -InterfaceAlias $primaryAdapter -ErrorAction Stop
+        $primaryInterface = Get-NetIPInterface -InterfaceAlias $primaryAdapter -AddressFamily IPv4 -ErrorAction Stop | Select-Object -First 1
+        $isStaticPrimary = ($primaryConfig.IPv4DefaultGateway -and $primaryInterface.Dhcp -eq 'Disabled')
+        if ($isStaticPrimary) {
+            Write-Output "Static IPv4 configuration detected on $primaryAdapter. DHCP release/renew will be skipped to avoid breaking connectivity."
+        }
+    }
+    catch {
+        Write-Output "Could not determine DHCP/static state for ${primaryAdapter}: $($_.Exception.Message)"
+    }
+}
+
 Invoke-DhcpStep -Name 'ipconfig /release' -Action {
-    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/release')
+    if ($isStaticPrimary) { throw "Skipped because $primaryAdapter uses static IPv4 configuration." }
+    $arguments = if ($primaryAdapter) { @('/release', $primaryAdapter) } else { @('/release') }
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments $arguments
+} -Optional
+
+Invoke-DhcpStep -Name 'ipconfig /renew' -Action {
+    if ($isStaticPrimary) { throw "Skipped because $primaryAdapter uses static IPv4 configuration." }
+    $arguments = if ($primaryAdapter) { @('/renew', $primaryAdapter) } else { @('/renew') }
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments $arguments
+} -Optional
+
+Invoke-DhcpStep -Name 'flush DNS resolver cache' -Action {
+    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/flushdns')
 }
 
 Invoke-DhcpStep -Name 'restart DHCP Client service' -Action {
     Restart-Service -Name Dhcp -Force -ErrorAction Stop
 } -Optional
-
-Invoke-DhcpStep -Name 'ipconfig /renew' -Action {
-    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/renew')
-}
-
-Invoke-DhcpStep -Name 'flush DNS resolver cache' -Action {
-    Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/flushdns')
-}
 
 Invoke-DhcpStep -Name 'register DNS records' -Action {
     Invoke-NativeDhcpCommand -FilePath 'ipconfig.exe' -Arguments @('/registerdns')
