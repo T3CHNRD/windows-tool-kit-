@@ -17,3 +17,7 @@ dist-latest/
 T3CHNRD'S Windows Tool Kit.exe
 T3CHNRD'S Windows Tool Kit (updated).exe
 Build/Installer/HarvestedFiles.wxs
+
+# Python cache
+__pycache__/
+*.pyc

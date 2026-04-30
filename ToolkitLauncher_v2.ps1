@@ -382,9 +382,9 @@ $titleBar.Add_Resize({
 $bodySplit                    = New-Object System.Windows.Forms.SplitContainer
 $bodySplit.Dock               = 'Fill'
 $bodySplit.FixedPanel         = 'Panel1'
-$bodySplit.SplitterDistance   = 210
-$bodySplit.Panel1MinSize      = 180
-$bodySplit.Panel2MinSize      = 760
+$bodySplit.Panel1MinSize      = 120
+$bodySplit.Panel2MinSize      = 240
+$bodySplit.SplitterDistance   = 170
 $bodySplit.BackColor          = [System.Drawing.Color]::FromArgb(30, 36, 52)
 [void]$rootPanel.Controls.Add($bodySplit, 0, 1)
 
@@ -431,9 +431,9 @@ $navList.DrawMode      = 'OwnerDrawFixed'
 $mainSplit                  = New-Object System.Windows.Forms.SplitContainer
 $mainSplit.Dock             = 'Fill'
 $mainSplit.FixedPanel       = 'Panel2'
-$mainSplit.SplitterDistance = 700
-$mainSplit.Panel1MinSize    = 520
-$mainSplit.Panel2MinSize    = 360
+$mainSplit.Panel1MinSize    = 260
+$mainSplit.Panel2MinSize    = 240
+$mainSplit.SplitterDistance = 520
 $mainSplit.BackColor        = [System.Drawing.Color]::FromArgb(30, 36, 52)
 [void]$bodySplit.Panel2.Controls.Add($mainSplit)
 
@@ -1154,9 +1154,12 @@ function Apply-Mode {
     $rightLayout.BackColor  = $pal.PanelRight
     $progressPanel.BackColor= $pal.PanelRight
     $logBox.BackColor       = $pal.LogBack
-    $rpDescBox.BackColor    = [System.Drawing.Color]::FromArgb(24, 28, 40)
+    $toolHeader.BackColor   = $pal.Header
+    $rpDescBox.BackColor    = $pal.CardBack
     $searchBox.BackColor    = $pal.CardHover
     $navList.BackColor      = $pal.Sidebar
+    $bodySplit.BackColor    = $pal.HeaderBorder
+    $mainSplit.BackColor    = $pal.HeaderBorder
 
     $toolNameLabel.ForeColor  = $pal.Text
     $toolDescLabel.ForeColor  = $pal.TextMid
@@ -1167,6 +1170,9 @@ function Apply-Mode {
     $rpSelectedLabel.ForeColor= $pal.TextDim
     $healthHeaderLabel.ForeColor = $pal.TextDim
     $logHeaderLabel.ForeColor    = $pal.TextDim
+    $titleLabel.ForeColor     = $pal.Text
+    $clockLabel.ForeColor     = $pal.TextMid
+    $searchBox.ForeColor      = if ($searchBox.Text -eq '🔍  Search tools…') { $pal.TextDim } else { $pal.Text }
 
     $runBtn.BackColor   = $pal.RunBtn
     $runBtn.ForeColor   = $pal.RunBtnText
@@ -1194,6 +1200,8 @@ function Apply-Mode {
 
         $toolNameLabel.Text = '🙂  What would you like to fix today?'
         $toolDescLabel.Text = 'Pick something below — each tool explains what it does before starting.'
+        $rpDescBox.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+        $rpDescBox.ForeColor = [System.Drawing.Color]::FromArgb(15, 23, 65)
 
         Populate-SimpleCards
     } else {
@@ -1221,6 +1229,8 @@ function Apply-Mode {
 
         $toolNameLabel.Text = '⚙️  IT Pro Mode'
         $toolDescLabel.Text = 'Select a category from the tabs or sidebar to browse tools.'
+        $rpDescBox.BackColor = [System.Drawing.Color]::FromArgb(24, 28, 40)
+        $rpDescBox.ForeColor = $pal.TextMid
         Populate-ProCards -Category ($script:CategoryOrder | Select-Object -First 1)
     }
 
@@ -1298,10 +1308,16 @@ function Apply-ResponsiveLayout {
 
     try {
         $sidebarWidth = if ($script:IsSimpleMode) { 170 } else { 210 }
-        $bodySplit.Panel1MinSize = 140
-        $bodySplit.Panel2MinSize = 620
-        $maxSidebar = [Math]::Max(140, $bodySplit.Width - $bodySplit.Panel2MinSize - 8)
-        $bodySplit.SplitterDistance = [int]([Math]::Min($sidebarWidth, $maxSidebar))
+        $bodyWidth = [int]$bodySplit.Width
+        if ($bodyWidth -gt 380) {
+            $bodySplit.Panel1MinSize = 120
+            $bodySplit.Panel2MinSize = 240
+            $maxSidebar = [Math]::Max(120, $bodyWidth - $bodySplit.Panel2MinSize - 8)
+            $safeSidebar = [int]([Math]::Max($bodySplit.Panel1MinSize, [Math]::Min($sidebarWidth, $maxSidebar)))
+            if ($safeSidebar -lt ($bodyWidth - $bodySplit.Panel2MinSize)) {
+                $bodySplit.SplitterDistance = $safeSidebar
+            }
+        }
     }
     catch {}
 
@@ -1310,17 +1326,19 @@ function Apply-ResponsiveLayout {
         if ($available -le 0) { return }
 
         $desiredRight = if ($script:IsSimpleMode) { 350 } else { 390 }
-        $minLeft = 460
-        $minRight = 320
+        $minLeft = 320
+        $minRight = 280
 
         if ($available -lt ($minLeft + $minRight + 16)) {
             $desiredRight = [Math]::Max(260, [Math]::Floor($available * 0.36))
-            $minLeft = [Math]::Max(260, $available - $desiredRight - 8)
-            $minRight = [Math]::Max(220, $desiredRight)
+            $minLeft = [Math]::Max(220, [Math]::Min(320, $available - $desiredRight - 8))
+            $minRight = [Math]::Max(180, [Math]::Min(280, $desiredRight))
         }
 
-        $mainSplit.Panel1MinSize = [int]$minLeft
-        $mainSplit.Panel2MinSize = [int]$minRight
+        if ($available -gt ($minLeft + $minRight + 8)) {
+            $mainSplit.Panel1MinSize = [int]$minLeft
+            $mainSplit.Panel2MinSize = [int]$minRight
+        }
 
         $splitterDistance = $available - $desiredRight
         $maxDistance = $available - $mainSplit.Panel2MinSize - 6

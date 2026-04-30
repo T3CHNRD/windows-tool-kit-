@@ -46,7 +46,7 @@ $arguments = @(
     '-NoExit',
     '-File', ('"{0}"' -f $candidateScript.FullName),
     '-DisplayInstall',
-    '-OfficeInstallerDownloadPath', ('"{0}"' -f $installerDownloadPath)
+    '-OfficeInstallDownloadPath', ('"{0}"' -f $installerDownloadPath)
 ) -join ' '
 
 $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Wait -PassThru -WindowStyle Normal
