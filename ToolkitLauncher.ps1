@@ -174,6 +174,11 @@ $script:DebloatInventory        = @()
 $script:WindowsUpdateSkipSel    = @()
 $script:WindowsUpdateInventory  = @()
 $script:TaskListsByCategory     = @{}
+$script:CurrentTaskStdoutPath   = $null
+$script:CurrentTaskStderrPath   = $null
+$script:CurrentTaskStdoutCount  = 0
+$script:CurrentTaskStderrCount  = 0
+$script:CurrentTaskResult       = $null
 
 # FIX: CRITICAL-04 - pre-create reusable GDI resources and dispose them on form close.
 $script:CardBorderPen           = New-Object System.Drawing.Pen(([System.Drawing.Color]::FromArgb(30, 36, 52)), 1)
@@ -382,9 +387,10 @@ $titleBar.Add_Resize({
 $bodySplit                    = New-Object System.Windows.Forms.SplitContainer
 $bodySplit.Dock               = 'Fill'
 $bodySplit.FixedPanel         = 'Panel1'
-$bodySplit.Panel1MinSize      = 120
-$bodySplit.Panel2MinSize      = 240
-$bodySplit.SplitterDistance   = 170
+# FIX: MARKET-01 - keep startup min sizes tiny until the container has a real width.
+# WinForms validates splitter constraints immediately, even before layout has completed.
+$bodySplit.Panel1MinSize      = 1
+$bodySplit.Panel2MinSize      = 1
 $bodySplit.BackColor          = [System.Drawing.Color]::FromArgb(30, 36, 52)
 [void]$rootPanel.Controls.Add($bodySplit, 0, 1)
 
@@ -431,9 +437,9 @@ $navList.DrawMode      = 'OwnerDrawFixed'
 $mainSplit                  = New-Object System.Windows.Forms.SplitContainer
 $mainSplit.Dock             = 'Fill'
 $mainSplit.FixedPanel       = 'Panel2'
-$mainSplit.Panel1MinSize    = 260
-$mainSplit.Panel2MinSize    = 240
-$mainSplit.SplitterDistance = 520
+# FIX: MARKET-01 - set real splitter distances only after layout has completed.
+$mainSplit.Panel1MinSize    = 1
+$mainSplit.Panel2MinSize    = 1
 $mainSplit.BackColor        = [System.Drawing.Color]::FromArgb(30, 36, 52)
 [void]$bodySplit.Panel2.Controls.Add($mainSplit)
 
@@ -1034,12 +1040,155 @@ function Add-LogLine {
 
 # ============================================================
 #  SECTION 11 — TASK EXECUTION ENGINE
-#  (your BackgroundWorker approach, preserved exactly)
+#  Background process host so long-running tools do not freeze the UI.
 # ============================================================
 
 function Test-TaskRunning {
     return ($script:CurrentTaskProcess -and -not $script:CurrentTaskProcess.HasExited)
 }
+
+function ConvertTo-LauncherArgument {
+    param([Parameter(Mandatory = $true)][string]$Value)
+    return '"' + ($Value -replace '"', '`"') + '"'
+}
+
+function Clear-TaskProcessFiles {
+    foreach ($path in @($script:CurrentTaskStdoutPath, $script:CurrentTaskStderrPath)) {
+        if ($path -and (Test-Path -LiteralPath $path)) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        }
+    }
+    $script:CurrentTaskStdoutPath = $null
+    $script:CurrentTaskStderrPath = $null
+    $script:CurrentTaskStdoutCount = 0
+    $script:CurrentTaskStderrCount = 0
+}
+
+function Receive-TaskOutputFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][ref]$ProcessedCount,
+        [switch]$IsError
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $allLines = @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)
+    if ($ProcessedCount.Value -ge $allLines.Count) { return }
+
+    for ($idx = [int]$ProcessedCount.Value; $idx -lt $allLines.Count; $idx++) {
+        $line = [string]$allLines[$idx]
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+        if ($line -like '__TTK__|*') {
+            $parts = @($line -split '\|')
+            switch ($parts[1]) {
+                'PROGRESS' {
+                    $pct = 0
+                    [int]::TryParse($parts[2], [ref]$pct) | Out-Null
+                    Set-Progress $pct
+                    if ($parts.Count -gt 3 -and -not [string]::IsNullOrWhiteSpace($parts[3])) {
+                        $statusLabel.Text = $parts[3]
+                        Add-LogLine $parts[3]
+                    }
+                }
+                'STATUS' {
+                    if ($parts.Count -gt 2 -and -not [string]::IsNullOrWhiteSpace($parts[2])) {
+                        $statusLabel.Text = $parts[2]
+                        Add-LogLine $parts[2]
+                    }
+                }
+                'LOG' {
+                    if ($parts.Count -gt 2) { Add-LogLine ($parts[2..($parts.Count - 1)] -join '|') }
+                }
+                'RESULT' {
+                    $script:CurrentTaskResult = [pscustomobject]@{
+                        Status = if ($parts.Count -gt 2) { $parts[2] } else { 'UNKNOWN' }
+                        Name = if ($parts.Count -gt 3) { $parts[3] } else { $script:SelectedTask.Name }
+                        Message = if ($parts.Count -gt 4) { ($parts[4..($parts.Count - 1)] -join '|') } else { '' }
+                    }
+                }
+                default {
+                    Add-LogLine $line
+                }
+            }
+        }
+        else {
+            Add-LogLine $(if ($IsError) { "ERROR: $line" } else { $line })
+        }
+    }
+
+    $ProcessedCount.Value = $allLines.Count
+}
+
+function Complete-CurrentTask {
+    param(
+        [Parameter(Mandatory = $true)][int]$ExitCode
+    )
+
+    $task = $script:SelectedTask
+    $success = ($ExitCode -eq 0 -and $script:CurrentTaskResult -and $script:CurrentTaskResult.Status -eq 'SUCCESS')
+    $message = if ($script:CurrentTaskResult -and $script:CurrentTaskResult.Message) {
+        $script:CurrentTaskResult.Message
+    }
+    elseif ($success) {
+        'Task completed successfully.'
+    }
+    else {
+        "Task exited with code $ExitCode."
+    }
+
+    $runBtn.Enabled = $true
+    $cancelBtn.Enabled = $false
+    Set-Progress $(if ($success) { 100 } else { 0 })
+    $statusLabel.Text = if ($success) { "Completed: $($task.Name)" } else { "Failed: $($task.Name)" }
+    Add-LogLine $(if ($success) { "$($task.Name) completed successfully." } else { "$($task.Name) failed: $message" })
+
+    if ($script:IsSimpleMode) {
+        $simpleStatusPanel.Visible = $true
+        if ($success) {
+            $simpleIconLabel.Text = 'OK'
+            $simpleTitleLabel.Text = 'All Done!'
+            $simpleTitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(22, 163, 74)
+            $simpleStatusPanel.BackColor = [System.Drawing.Color]::FromArgb(240, 253, 244)
+            $simpleMsgLabel.Text = "$($task.Name) finished successfully."
+        }
+        else {
+            $simpleIconLabel.Text = '!'
+            $simpleTitleLabel.Text = 'Something went wrong'
+            $simpleTitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+            $simpleStatusPanel.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
+            $simpleMsgLabel.Text = "The task did not finish. Details were saved in the log."
+        }
+    }
+
+    if ($script:CurrentTaskProcess) {
+        try { $script:CurrentTaskProcess.Dispose() } catch {}
+    }
+    $script:CurrentTaskProcess = $null
+    Clear-TaskProcessFiles
+}
+
+$taskMonitorTimer = New-Object System.Windows.Forms.Timer
+$taskMonitorTimer.Interval = 200
+$taskMonitorTimer.Add_Tick({
+    try {
+        if ($script:CurrentTaskStdoutPath) {
+            Receive-TaskOutputFile -Path $script:CurrentTaskStdoutPath -ProcessedCount ([ref]$script:CurrentTaskStdoutCount)
+        }
+        if ($script:CurrentTaskStderrPath) {
+            Receive-TaskOutputFile -Path $script:CurrentTaskStderrPath -ProcessedCount ([ref]$script:CurrentTaskStderrCount) -IsError
+        }
+
+        if ($script:CurrentTaskProcess -and $script:CurrentTaskProcess.HasExited) {
+            $exitCode = $script:CurrentTaskProcess.ExitCode
+            $taskMonitorTimer.Stop()
+            Complete-CurrentTask -ExitCode $exitCode
+        }
+    }
+    catch {
+        Add-LogLine "Task monitor skipped: $($_.Exception.Message)"
+    }
+})
 
 function Stop-TaskProcessTree {
     if (-not $script:CurrentTaskProcess) { return }
@@ -1058,6 +1207,48 @@ function Set-Progress {
     $v = [Math]::Max(0, [Math]::Min(100, $Value))
     $progressBar.Value  = $v
     $script:ProgressValue = $v
+}
+
+function Start-ToolkitTaskProcess {
+    param([Parameter(Mandatory = $true)]$Task)
+
+    Clear-TaskProcessFiles
+    $script:CurrentTaskResult = $null
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+    $script:CurrentTaskStdoutPath = Join-Path $env:TEMP ("T3CHNRD-Launcher-$stamp-stdout.log")
+    $script:CurrentTaskStderrPath = Join-Path $env:TEMP ("T3CHNRD-Launcher-$stamp-stderr.log")
+
+    $hostScript = Join-Path $toolkitRoot 'Scripts\Invoke-ToolkitTaskHost.ps1'
+    if (-not (Test-Path -LiteralPath $hostScript)) {
+        throw "Task host script not found: $hostScript"
+    }
+
+    $args = @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', (ConvertTo-LauncherArgument $hostScript),
+        '-ToolkitRoot', (ConvertTo-LauncherArgument $toolkitRoot),
+        '-TaskId', (ConvertTo-LauncherArgument $Task.Id)
+    ) -join ' '
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    # FIX: MARKET-04 - cmd.exe owns redirection; powershell.exe -File does not reliably
+    # apply trailing redirection when launched directly through ProcessStartInfo.
+    $command = '"powershell.exe" ' + $args + " 1> $(ConvertTo-LauncherArgument $script:CurrentTaskStdoutPath) 2> $(ConvertTo-LauncherArgument $script:CurrentTaskStderrPath)"
+    $psi.FileName = $env:ComSpec
+    $psi.Arguments = '/d /s /c "' + $command + '"'
+    $psi.WorkingDirectory = $toolkitRoot
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    if (-not $process.Start()) {
+        throw "Could not start task host for $($Task.Name)."
+    }
+
+    $script:CurrentTaskProcess = $process
+    $taskMonitorTimer.Start()
 }
 
 $runBtn.Add_Click({
@@ -1089,38 +1280,9 @@ $runBtn.Add_Click({
 
     Add-LogLine "Starting: $($task.Name)"
 
-    # Invoke via your existing module function
     try {
-        Invoke-ToolkitTask -Task $task -OnProgress {
-            param([int]$pct, [string]$msg)
-            Set-Progress $pct
-            $statusLabel.Text = $msg
-            if (-not [string]::IsNullOrWhiteSpace($msg)) { Add-LogLine $msg }
-            [System.Windows.Forms.Application]::DoEvents()
-        } -OnComplete {
-            param([bool]$success, [string]$msg)
-            $runBtn.Enabled    = $true
-            $cancelBtn.Enabled = $false
-            Set-Progress 100
-            $statusLabel.Text  = if ($success) { "✓ Completed: $($task.Name)" } else { "✗ Failed: $($task.Name)" }
-            Add-LogLine $(if ($success) { "✓ $($task.Name) completed successfully." } else { "✗ $($task.Name) failed: $msg" })
-
-            if ($script:IsSimpleMode) {
-                $simpleStatusPanel.Visible = $true
-                if ($success) {
-                    $simpleIconLabel.Text  = '✅'
-                    $simpleTitleLabel.Text = 'All Done!'
-                    $simpleTitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(22, 163, 74)
-                    $simpleStatusPanel.BackColor = [System.Drawing.Color]::FromArgb(240, 253, 244)
-                } else {
-                    $simpleIconLabel.Text  = '❌'
-                    $simpleTitleLabel.Text = 'Something went wrong'
-                    $simpleTitleLabel.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
-                    $simpleStatusPanel.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
-                    $simpleMsgLabel.Text = "Don't worry — nothing was permanently changed. You can try again or ask your IT person."
-                }
-            }
-        }
+        # FIX: MARKET-02 - run task scripts in a child host so the WinForms UI remains responsive.
+        Start-ToolkitTaskProcess -Task $task
     } catch {
         $runBtn.Enabled    = $true
         $cancelBtn.Enabled = $false
@@ -1132,10 +1294,12 @@ $runBtn.Add_Click({
 $cancelBtn.Add_Click({
     $script:CancellationRequested = $true
     Stop-TaskProcessTree
+    $taskMonitorTimer.Stop()
     $statusLabel.Text  = 'Cancelled.'
     $cancelBtn.Enabled = $false
     $runBtn.Enabled    = $true
     Add-LogLine 'Task cancelled by user.'
+    Clear-TaskProcessFiles
 })
 
 # ============================================================
@@ -1309,46 +1473,44 @@ function Apply-ResponsiveLayout {
     try {
         $sidebarWidth = if ($script:IsSimpleMode) { 170 } else { 210 }
         $bodyWidth = [int]$bodySplit.Width
-        if ($bodyWidth -gt 380) {
-            $bodySplit.Panel1MinSize = 120
-            $bodySplit.Panel2MinSize = 240
-            $maxSidebar = [Math]::Max(120, $bodyWidth - $bodySplit.Panel2MinSize - 8)
-            $safeSidebar = [int]([Math]::Max($bodySplit.Panel1MinSize, [Math]::Min($sidebarWidth, $maxSidebar)))
-            if ($safeSidebar -lt ($bodyWidth - $bodySplit.Panel2MinSize)) {
+        if ($bodyWidth -gt 60) {
+            # FIX: MARKET-01 - never increase MinSize before the splitter is known valid for the current width.
+            $bodySplit.Panel1MinSize = 1
+            $bodySplit.Panel2MinSize = 1
+            $maxSidebar = [Math]::Max(40, $bodyWidth - 80)
+            $safeSidebar = [int]([Math]::Max(40, [Math]::Min($sidebarWidth, $maxSidebar)))
+            if ($safeSidebar -gt 0 -and $safeSidebar -lt ($bodyWidth - 1)) {
                 $bodySplit.SplitterDistance = $safeSidebar
             }
         }
     }
-    catch {}
+    catch {
+        Add-LogLine "Responsive body layout skipped: $($_.Exception.Message)"
+    }
 
     try {
         $available = [int]$mainSplit.Width
         if ($available -le 0) { return }
 
         $desiredRight = if ($script:IsSimpleMode) { 350 } else { 390 }
-        $minLeft = 320
-        $minRight = 280
-
-        if ($available -lt ($minLeft + $minRight + 16)) {
-            $desiredRight = [Math]::Max(260, [Math]::Floor($available * 0.36))
-            $minLeft = [Math]::Max(220, [Math]::Min(320, $available - $desiredRight - 8))
-            $minRight = [Math]::Max(180, [Math]::Min(280, $desiredRight))
+        if ($available -lt 720) {
+            $desiredRight = [Math]::Max(240, [Math]::Floor($available * 0.34))
         }
 
-        if ($available -gt ($minLeft + $minRight + 8)) {
-            $mainSplit.Panel1MinSize = [int]$minLeft
-            $mainSplit.Panel2MinSize = [int]$minRight
-        }
-
+        # FIX: MARKET-01 - keep SplitContainer MinSize at 1 to avoid DPI/startup crashes.
+        $mainSplit.Panel1MinSize = 1
+        $mainSplit.Panel2MinSize = 1
         $splitterDistance = $available - $desiredRight
-        $maxDistance = $available - $mainSplit.Panel2MinSize - 6
-        $splitterDistance = [Math]::Max($mainSplit.Panel1MinSize, [Math]::Min($splitterDistance, $maxDistance))
+        $maxDistance = $available - 2
+        $splitterDistance = [Math]::Max(1, [Math]::Min($splitterDistance, $maxDistance))
 
         if ($splitterDistance -gt 0 -and $splitterDistance -lt $available) {
             $mainSplit.SplitterDistance = [int]$splitterDistance
         }
     }
-    catch {}
+    catch {
+        Add-LogLine "Responsive main layout skipped: $($_.Exception.Message)"
+    }
 
     $toolDescLabel.MaximumSize = New-Object System.Drawing.Size(([Math]::Max(260, $toolHeader.Width - 32)), 0)
 }
@@ -1419,7 +1581,9 @@ $form.Add_Resize({
 $form.Add_FormClosing({
     # FIX: LOW-14 - stop/dispose timers and GDI resources during shutdown.
     try { $clockTimer.Stop(); $clockTimer.Dispose() } catch {}
+    try { $taskMonitorTimer.Stop(); $taskMonitorTimer.Dispose() } catch {}
     Stop-TaskProcessTree
+    Clear-TaskProcessFiles
     try {
         if ($script:CardBorderPen) {
             $script:CardBorderPen.Dispose()

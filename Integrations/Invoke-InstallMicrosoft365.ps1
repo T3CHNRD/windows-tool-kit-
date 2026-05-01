@@ -43,14 +43,14 @@ Write-Output 'The visible Install-Microsoft365 window is the mallockey workflow.
 $arguments = @(
     '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
-    '-NoExit',
     '-File', ('"{0}"' -f $candidateScript.FullName),
     '-DisplayInstall',
     '-OfficeInstallDownloadPath', ('"{0}"' -f $installerDownloadPath)
 ) -join ' '
 
-$process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Wait -PassThru -WindowStyle Normal
-Write-Output "Install-Microsoft365 workflow process exited with code $($process.ExitCode)."
-if ($process.ExitCode -ne 0) {
-    throw "Install-Microsoft365 workflow exited with code $($process.ExitCode)."
-}
+# FIX: MARKET-03 - do not wait on the interactive mallockey installer window.
+# The toolkit task should report that the official workflow launched, while the
+# visible installer window owns the interactive prompts and install lifecycle.
+$process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -PassThru -WindowStyle Normal
+Write-Output "Install-Microsoft365 workflow launched in process ID $($process.Id)."
+Write-Output 'Follow the instructions in the visible Microsoft 365 installer window.'
