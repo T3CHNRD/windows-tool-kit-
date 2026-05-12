@@ -377,9 +377,40 @@ $clockLabel.AutoSize   = $true
 $clockLabel.TextAlign  = 'MiddleRight'
 [void]$titleBar.Controls.Add($clockLabel)
 
+$aboutBtn              = New-Object System.Windows.Forms.Button
+$aboutBtn.Text         = 'About / Credits'
+$aboutBtn.Font         = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+$aboutBtn.ForeColor    = [System.Drawing.Color]::White
+$aboutBtn.BackColor    = [System.Drawing.Color]::FromArgb(31, 41, 55)
+$aboutBtn.FlatStyle    = 'Flat'
+$aboutBtn.FlatAppearance.BorderSize = 0
+$aboutBtn.Size         = New-Object System.Drawing.Size(130, 32)
+$aboutBtn.Cursor       = [System.Windows.Forms.Cursors]::Hand
+$aboutBtn.Add_Click({
+    $message = @(
+        "T3CHNRD'S Windows Tool Kit"
+        'A portable Windows maintenance, deployment, diagnostics, and security toolkit.'
+        ''
+        'Project owner: T3CHNRD'
+        'GitHub: https://github.com/T3CHNRD/windows-tool-kit-'
+        ''
+        'Credits and references:'
+        '- KillerTools by SteveTheKiller: https://killertools.net/'
+        '- KillerTools source: https://github.com/SteveTheKiller/killer-tools-site'
+        '- KillerScan: https://github.com/SteveTheKiller/KillerScan'
+        '- Install-Microsoft365 by mallockey: https://github.com/mallockey/Install-Microsoft365'
+        '- Microsoft Windows Media Creation Tool workflow and official Microsoft documentation'
+        ''
+        'KillerTools-inspired items in this app are local PowerShell implementations adapted for this Windows toolkit.'
+    ) -join [Environment]::NewLine
+    [System.Windows.Forms.MessageBox]::Show($message, "About T3CHNRD'S Windows Tool Kit", 'OK', 'Information') | Out-Null
+})
+[void]$titleBar.Controls.Add($aboutBtn)
+
 # Position toggle & clock on resize
 $titleBar.Add_Resize({
     $modeToggleBtn.Location = New-Object System.Drawing.Point(($titleBar.Width - $modeToggleBtn.Width - 120), 11)
+    $aboutBtn.Location      = New-Object System.Drawing.Point(($modeToggleBtn.Left - $aboutBtn.Width - 12), 13)
     $clockLabel.Location    = New-Object System.Drawing.Point(($titleBar.Width - 95), 20)
 })
 
@@ -958,6 +989,10 @@ function Get-TaskIcon {
         'Network.Diagnostics'        = '🌐'
         'Network.DhcpRenew'          = '🔁'
         'Network.ResetStack'         = '♻️'
+        'Network.KillerScan'         = '📡'
+        'Network.DomainLookup'       = '🔎'
+        'Network.MacAddressLookup'   = '🏷️'
+        'Cleanup.MaceCleanup'        = '🧽'
         'Update.AllApps'             = '🔄'
         'Update.WindowsOS'           = '🪟'
         'Update.VendorDrivers'       = '🖥️'
@@ -969,10 +1004,18 @@ function Get-TaskIcon {
         'Security.DefenderQuickScan' = '🔍'
         'Security.OpenPortsAudit'    = '🔒'
         'Security.PowerShellRiskScan'= '⚠️'
+        'Security.EncryptionHelper'  = '🔐'
+        'Security.DefendAudit'       = '🛡️'
+        'Security.AmortPersistence'  = '🧬'
+        'Security.BeretBrowser'      = '🧢'
+        'Security.OrcaReport'        = '🐋'
+        'Security.ShadePrivacy'      = '🕶️'
         'Hardware.MouseKeyboardTest' = '🖱️'
         'Hardware.MonitorPixelTest'  = '🖥️'
         'Storage.CloneGuide'         = '📀'
         'Storage.NewComputerSetup'   = '🆕'
+        'Storage.DataTransferWizard' = '📁'
+        'Misc.DeviceInformation'     = 'ℹ️'
     }
     if ($icons.ContainsKey($Id)) { return $icons[$Id] }
     if ($Id -like 'Legacy.*')    { return '💻' }
@@ -1351,6 +1394,8 @@ function Apply-Mode {
 
     $runBtn.BackColor   = $pal.RunBtn
     $runBtn.ForeColor   = $pal.RunBtnText
+    $aboutBtn.BackColor = $pal.CardHover
+    $aboutBtn.ForeColor = $pal.Text
     $script:CardBorderPen.Color = $pal.CardBorder
     $cancelBtn.Visible = Test-TaskRunning
 

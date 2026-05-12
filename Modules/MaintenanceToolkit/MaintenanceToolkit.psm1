@@ -582,6 +582,39 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Network.KillerScan'
+            Name = 'KillerScan-Inspired Local Network Scan'
+            Category = 'Network Tools'
+            Description = 'KillerTools KillerScan-inspired local subnet scan with ping discovery, DNS lookup, and common port probing. Generates a CSV report.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-KillerNetworkScan.ps1' -StepName 'KillerScan-inspired local network scan'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Network.DomainLookup'
+            Name = 'Domain Lookup'
+            Category = 'Network Tools'
+            Description = 'KillerTools Domain Lookup-inspired DNS report for A, AAAA, MX, NS, TXT, and SOA records.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DomainLookup.ps1' -StepName 'Domain lookup'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Network.MacAddressLookup'
+            Name = 'MAC Address Lookup'
+            Category = 'Network Tools'
+            Description = 'KillerTools MAC Address Lookup-inspired OUI/vendor lookup for a device MAC address.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-MacAddressLookup.ps1' -StepName 'MAC address lookup'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Cleanup.TempFiles'
             Name = 'Clear Temp and Junk Files'
             Category = 'Cleanup'
@@ -604,6 +637,17 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Cleanup.MaceCleanup'
+            Name = 'MACE-Inspired Deep Cleanup'
+            Category = 'Cleanup'
+            Description = 'KillerTools MACE-inspired safe cleanup pass for temp folders and recycle bin with completed/skipped/failed summary.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-MaceCleanup.ps1' -StepName 'MACE-inspired cleanup'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Disk.Monitor'
             Name = 'Disk Space Monitor'
             Category = 'Storage / Setup'
@@ -623,6 +667,17 @@ function Get-ToolkitTaskCatalog {
             Handler = {
                 param($Context, $Task)
                 Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DriveScanRepair.ps1' -StepName 'Drive scan and repair'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Storage.DataTransferWizard'
+            Name = 'Data Transfer Wizard'
+            Category = 'Storage / Setup'
+            Description = 'Guided old-to-new PC transfer workflow. Detects external drives, prompts for a source if none are present, copies with robocopy, and logs copied/skipped/failed details.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DataTransferWizard.ps1' -StepName 'Data Transfer Wizard'
             }
         },
         [pscustomobject]@{
@@ -722,6 +777,72 @@ function Get-ToolkitTaskCatalog {
             Handler = {
                 param($Context, $Task)
                 Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DisableBitLocker.ps1' -StepName 'Turn off BitLocker'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.EncryptionHelper'
+            Name = 'Encryption and Hash Helper'
+            Category = 'Security'
+            Description = 'KillerTools Encryption-inspired helper for AES text encryption/decryption and SHA/MD5 hashing.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-KillerEncryptionHelper.ps1' -StepName 'Encryption and hash helper'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.DefendAudit'
+            Name = 'DEFEND-Inspired Security Audit'
+            Category = 'Security'
+            Description = 'KillerTools DEFEND-inspired Defender, firewall, and anti-malware posture audit. Reports only; no changes.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DefendAudit.ps1' -StepName 'DEFEND-inspired security audit'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.AmortPersistence'
+            Name = 'AMORT-Inspired Persistence Review'
+            Category = 'Security'
+            Description = 'KillerTools AMORT-inspired review of startup persistence: Run keys, startup folders, scheduled tasks, and automatic services.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-AmortPersistenceReview.ps1' -StepName 'AMORT-inspired persistence review'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.BeretBrowser'
+            Name = 'BERET-Inspired Browser Review'
+            Category = 'Security'
+            Description = 'KillerTools BERET-inspired browser extension inventory for Chrome, Edge, and Firefox trust review.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-BeretBrowserReview.ps1' -StepName 'BERET-inspired browser review'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.OrcaReport'
+            Name = 'ORCA-Inspired Security Report'
+            Category = 'Security'
+            Description = 'KillerTools ORCA-inspired combined endpoint security posture report: Defender, firewall, listening ports, and SMBv1.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-OrcaSecurityReport.ps1' -StepName 'ORCA-inspired security report'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.ShadePrivacy'
+            Name = 'SHADE-Inspired Privacy Audit'
+            Category = 'Security'
+            Description = 'KillerTools SHADE-inspired Windows privacy setting audit. Reports privacy-sensitive settings without changing them.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-ShadePrivacyAudit.ps1' -StepName 'SHADE-inspired privacy audit'
             }
         },
         [pscustomobject]@{
@@ -831,7 +952,7 @@ function Get-ToolkitTaskCatalog {
             Id = 'Apps.DebloatHelper'
             Name = 'Debloat / Uninstall Helper'
             Category = 'Applications'
-            Description = 'Exports installed application lists for safe manual review and uninstall.'
+            Description = 'KillerTools DEBLOAT-inspired installed-app inventory for safe manual review and uninstall. Exports AppX, winget, and Win32 uninstall entries.'
             RequiresAdmin = $false
             Handler = {
                 param($Context, $Task)
@@ -843,6 +964,17 @@ function Get-ToolkitTaskCatalog {
                     }
                 }
                 Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DebloatInventory.ps1' -StepName 'Debloat and uninstall helper' -AdditionalArguments $extraArguments
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Misc.DeviceInformation'
+            Name = 'Device Information Report'
+            Category = 'Misc/Utility'
+            Description = 'KillerTools Device Information-inspired local report for model, BIOS, OS, CPU, RAM, disks, and network adapters.'
+            RequiresAdmin = $false
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DeviceInformationReport.ps1' -StepName 'Device information report'
             }
         },
         [pscustomobject]@{

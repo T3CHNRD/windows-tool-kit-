@@ -9,15 +9,24 @@ PowerShell-based desktop toolkit with a unified WinForms launcher for maintenanc
 - Unified logging to `Logs/`
 - Core maintenance tasks:
   - Network diagnostics and network stack reset
+  - KillerTools-inspired local network scan, domain lookup, and MAC vendor lookup
   - Temp/junk cleanup and C: drive free-space cleanup
   - Disk space monitoring
+  - Data Transfer Wizard using `robocopy` for old-to-new PC or external-drive transfers
   - Update all apps with `winget`
   - Windows repair checks (`DISM` + `SFC`)
-  - Debloat helper (installed app inventory export)
+  - Debloat helper (KillerTools DEBLOAT-inspired installed app inventory export)
+  - Security audit tools including Defender, privacy, persistence, browser-extension, encryption/hash, BitLocker, and open-port reviews
 - External integrations:
   - `mallockey/Install-Microsoft365` wrapper
   - Microsoft official Media Creation Tool workflow wrapper
 - Imported scripts from ZIP preserved in `LegacyScripts/` and exposed in launcher
+
+## Credits
+- Toolkit project owner: T3CHNRD
+- KillerTools and KillerScan inspiration/reference: https://killertools.net/ and https://github.com/SteveTheKiller/killer-tools-site
+- Install-Microsoft365 integration reference: https://github.com/mallockey/Install-Microsoft365
+- Windows Media Creation Tool workflow: Microsoft official documentation and download pages
 
 ## Folder Structure
 ```text

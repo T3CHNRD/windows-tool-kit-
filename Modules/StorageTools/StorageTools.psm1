@@ -58,6 +58,265 @@ function Start-TtkFileTransfer {
     }
 }
 
+function Get-TtkExternalTransferDrives {
+    [CmdletBinding()]
+    param()
+
+    $usbLetters = @{}
+    try {
+        Get-Disk -ErrorAction SilentlyContinue |
+            Where-Object { $_.BusType -eq 'USB' } |
+            Get-Partition -ErrorAction SilentlyContinue |
+            Where-Object { $_.DriveLetter } |
+            ForEach-Object { $usbLetters["$($_.DriveLetter):"] = $true }
+    }
+    catch {
+        # Keep detection best-effort. Win32_LogicalDisk below still catches removable media.
+    }
+
+    Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction SilentlyContinue |
+        Where-Object { $_.DeviceID -and (($_.DriveType -eq 2) -or $usbLetters.ContainsKey($_.DeviceID)) } |
+        ForEach-Object {
+            [pscustomobject]@{
+                Drive       = $_.DeviceID
+                Label       = $_.VolumeName
+                FileSystem  = $_.FileSystem
+                SizeGB      = if ($_.Size) { [math]::Round($_.Size / 1GB, 2) } else { 0 }
+                FreeGB      = if ($_.FreeSpace) { [math]::Round($_.FreeSpace / 1GB, 2) } else { 0 }
+                DisplayName = '{0}\  {1}  Free: {2} GB  Size: {3} GB' -f $_.DeviceID, $(if ($_.VolumeName) { "($($_.VolumeName))" } else { '(External/Removable)' }), $(if ($_.FreeSpace) { [math]::Round($_.FreeSpace / 1GB, 2) } else { 0 }), $(if ($_.Size) { [math]::Round($_.Size / 1GB, 2) } else { 0 })
+            }
+        }
+}
+
+function Show-TtkDataTransferWizard {
+    [CmdletBinding()]
+    param(
+        [string]$DefaultDestination = (Join-Path $env:USERPROFILE 'TransferredData')
+    )
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $result = [pscustomobject]@{
+        Completed   = $false
+        Cancelled   = $false
+        Source      = $null
+        Destination = $null
+        LogPath     = $null
+        ExitCode    = $null
+        Summary     = 'No transfer was started.'
+    }
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Data Transfer Wizard'
+    $form.StartPosition = 'CenterScreen'
+    $form.Size = New-Object System.Drawing.Size(780, 560)
+    $form.MinimumSize = New-Object System.Drawing.Size(720, 520)
+    $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $form.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
+
+    $layout = New-Object System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = 'Fill'
+    $layout.RowCount = 7
+    $layout.ColumnCount = 1
+    $layout.Padding = New-Object System.Windows.Forms.Padding(14)
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 130)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 44)))
+    [void]$form.Controls.Add($layout)
+
+    $header = New-Object System.Windows.Forms.Label
+    $header.Text = "Transfer files from an old PC, external drive, or network folder. The wizard checks for attached external drives first, but you can browse to any source folder."
+    $header.AutoSize = $true
+    $header.MaximumSize = New-Object System.Drawing.Size(730, 0)
+    $header.ForeColor = [System.Drawing.Color]::FromArgb(31, 41, 80)
+    $header.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
+    [void]$layout.Controls.Add($header, 0, 0)
+
+    $driveList = New-Object System.Windows.Forms.ListBox
+    $driveList.Dock = 'Fill'
+    $driveList.DisplayMember = 'DisplayName'
+    $driveList.BackColor = [System.Drawing.Color]::White
+    [void]$layout.Controls.Add($driveList, 0, 1)
+
+    $sourcePanel = New-Object System.Windows.Forms.TableLayoutPanel
+    $sourcePanel.Dock = 'Top'
+    $sourcePanel.ColumnCount = 3
+    $sourcePanel.RowCount = 1
+    [void]$sourcePanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute, 95)))
+    [void]$sourcePanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+    [void]$sourcePanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute, 110)))
+    [void]$layout.Controls.Add($sourcePanel, 0, 2)
+
+    $sourceLabel = New-Object System.Windows.Forms.Label
+    $sourceLabel.Text = 'Source:'
+    $sourceLabel.Dock = 'Fill'
+    $sourceLabel.TextAlign = 'MiddleLeft'
+    [void]$sourcePanel.Controls.Add($sourceLabel, 0, 0)
+
+    $sourceBox = New-Object System.Windows.Forms.TextBox
+    $sourceBox.Dock = 'Fill'
+    [void]$sourcePanel.Controls.Add($sourceBox, 1, 0)
+
+    $browseSource = New-Object System.Windows.Forms.Button
+    $browseSource.Text = 'Browse...'
+    $browseSource.Dock = 'Fill'
+    [void]$sourcePanel.Controls.Add($browseSource, 2, 0)
+
+    $destPanel = New-Object System.Windows.Forms.TableLayoutPanel
+    $destPanel.Dock = 'Top'
+    $destPanel.ColumnCount = 3
+    $destPanel.RowCount = 1
+    [void]$destPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute, 95)))
+    [void]$destPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+    [void]$destPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute, 110)))
+    [void]$layout.Controls.Add($destPanel, 0, 3)
+
+    $destLabel = New-Object System.Windows.Forms.Label
+    $destLabel.Text = 'Destination:'
+    $destLabel.Dock = 'Fill'
+    $destLabel.TextAlign = 'MiddleLeft'
+    [void]$destPanel.Controls.Add($destLabel, 0, 0)
+
+    $destBox = New-Object System.Windows.Forms.TextBox
+    $destBox.Dock = 'Fill'
+    $destBox.Text = $DefaultDestination
+    [void]$destPanel.Controls.Add($destBox, 1, 0)
+
+    $browseDest = New-Object System.Windows.Forms.Button
+    $browseDest.Text = 'Browse...'
+    $browseDest.Dock = 'Fill'
+    [void]$destPanel.Controls.Add($browseDest, 2, 0)
+
+    $moveCheck = New-Object System.Windows.Forms.CheckBox
+    $moveCheck.Text = 'Move files instead of copying them (advanced; copy is safer)'
+    $moveCheck.AutoSize = $true
+    $moveCheck.Margin = New-Object System.Windows.Forms.Padding(0, 8, 0, 8)
+    [void]$layout.Controls.Add($moveCheck, 0, 4)
+
+    $logBox = New-Object System.Windows.Forms.TextBox
+    $logBox.Multiline = $true
+    $logBox.ReadOnly = $true
+    $logBox.ScrollBars = 'Vertical'
+    $logBox.Dock = 'Fill'
+    $logBox.BackColor = [System.Drawing.Color]::White
+    [void]$layout.Controls.Add($logBox, 0, 5)
+
+    $buttons = New-Object System.Windows.Forms.FlowLayoutPanel
+    $buttons.Dock = 'Fill'
+    $buttons.FlowDirection = 'RightToLeft'
+    [void]$layout.Controls.Add($buttons, 0, 6)
+
+    $close = New-Object System.Windows.Forms.Button
+    $close.Text = 'Close'
+    $close.Size = New-Object System.Drawing.Size(110, 32)
+    $close.Add_Click({ $result.Cancelled = -not $result.Completed; $form.Close() })
+    [void]$buttons.Controls.Add($close)
+
+    $start = New-Object System.Windows.Forms.Button
+    $start.Text = 'Start Transfer'
+    $start.Size = New-Object System.Drawing.Size(140, 32)
+    [void]$buttons.Controls.Add($start)
+
+    $refresh = New-Object System.Windows.Forms.Button
+    $refresh.Text = 'Refresh Drives'
+    $refresh.Size = New-Object System.Drawing.Size(130, 32)
+    [void]$buttons.Controls.Add($refresh)
+
+    $appendLog = {
+        param([string]$Line)
+        $logBox.AppendText(("[{0:HH:mm:ss}] {1}{2}" -f (Get-Date), $Line, [Environment]::NewLine))
+    }
+
+    $loadDrives = {
+        $driveList.Items.Clear()
+        $drives = @(Get-TtkExternalTransferDrives)
+        foreach ($drive in $drives) { [void]$driveList.Items.Add($drive) }
+        if ($drives.Count -eq 0) {
+            & $appendLog 'No external/removable drive detected. Plug in the old drive, click Refresh Drives, or use Browse to pick a network/source folder.'
+        }
+        else {
+            & $appendLog ("Detected {0} external/removable source candidate(s)." -f $drives.Count)
+            $driveList.SelectedIndex = 0
+            $sourceBox.Text = $drives[0].Drive + '\'
+        }
+    }
+
+    $driveList.Add_SelectedIndexChanged({
+        if ($driveList.SelectedItem) {
+            $sourceBox.Text = $driveList.SelectedItem.Drive + '\'
+        }
+    })
+
+    $browseFolder = {
+        param([System.Windows.Forms.TextBox]$TargetBox)
+        $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dlg.Description = 'Choose a folder'
+        if ($TargetBox.Text -and (Test-Path -LiteralPath $TargetBox.Text)) {
+            $dlg.SelectedPath = $TargetBox.Text
+        }
+        if ($dlg.ShowDialog($form) -eq 'OK') {
+            $TargetBox.Text = $dlg.SelectedPath
+        }
+    }
+
+    $browseSource.Add_Click({ & $browseFolder $sourceBox })
+    $browseDest.Add_Click({ & $browseFolder $destBox })
+    $refresh.Add_Click($loadDrives)
+
+    $start.Add_Click({
+        if (-not (Test-Path -LiteralPath $sourceBox.Text)) {
+            [System.Windows.Forms.MessageBox]::Show('Choose a valid source folder first.', 'Data Transfer Wizard', 'OK', 'Warning') | Out-Null
+            return
+        }
+        if ([string]::IsNullOrWhiteSpace($destBox.Text)) {
+            [System.Windows.Forms.MessageBox]::Show('Choose a destination folder first.', 'Data Transfer Wizard', 'OK', 'Warning') | Out-Null
+            return
+        }
+
+        $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+        $logDir = Join-Path $root 'Logs'
+        if (-not (Test-Path -LiteralPath $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+        $transferLog = Join-Path $logDir ("DataTransfer-{0:yyyyMMdd-HHmmss}.log" -f (Get-Date))
+
+        $start.Enabled = $false
+        & $appendLog "Starting robocopy transfer."
+        & $appendLog "Source: $($sourceBox.Text)"
+        & $appendLog "Destination: $($destBox.Text)"
+        [System.Windows.Forms.Application]::DoEvents()
+
+        try {
+            $copyResult = Start-TtkFileTransfer -Source $sourceBox.Text -Destination $destBox.Text -Move:($moveCheck.Checked) -LogPath $transferLog
+            $result.Completed = $true
+            $result.Source = $sourceBox.Text
+            $result.Destination = $destBox.Text
+            $result.LogPath = $copyResult.LogPath
+            $result.ExitCode = $copyResult.ExitCode
+            $result.Summary = "Robocopy completed with exit code $($copyResult.ExitCode). Copied/skipped/failed details are in $($copyResult.LogPath)."
+            & $appendLog $result.Summary
+            [System.Windows.Forms.MessageBox]::Show($result.Summary, 'Transfer Complete', 'OK', 'Information') | Out-Null
+        }
+        catch {
+            $result.Completed = $false
+            $result.LogPath = $transferLog
+            $result.Summary = $_.Exception.Message
+            & $appendLog "Transfer failed: $($result.Summary)"
+            [System.Windows.Forms.MessageBox]::Show($result.Summary, 'Transfer Failed', 'OK', 'Error') | Out-Null
+        }
+        finally {
+            $start.Enabled = $true
+        }
+    })
+
+    & $loadDrives
+    [void]$form.ShowDialog()
+    return $result
+}
+
 function Get-TtkDiskInventory {
     [CmdletBinding()]
     param()
@@ -125,8 +384,8 @@ function Get-TtkNewComputerSetupChecklistItems {
         [pscustomobject]@{
             Order = 6
             Step = 'User data transfer'
-            Details = 'Move user documents, desktop files, browser exports, and profile data from the old device or drive.'
-            SuggestedTool = 'File Transfer Script'
+            Details = 'DEPOT-inspired setup step: plug in the old drive or choose a network/source folder, then use the Data Transfer Wizard to copy user files with robocopy logging.'
+            SuggestedTool = 'Data Transfer Wizard'
         }
         [pscustomobject]@{
             Order = 7
@@ -220,6 +479,11 @@ function Show-TtkNewComputerSetupChecklist {
     $markAllButton.Size = New-Object System.Drawing.Size(130, 32)
     [void]$buttonPanel.Controls.Add($markAllButton)
 
+    $transferButton = New-Object System.Windows.Forms.Button
+    $transferButton.Text = 'Transfer Data'
+    $transferButton.Size = New-Object System.Drawing.Size(130, 32)
+    [void]$buttonPanel.Controls.Add($transferButton)
+
     $updateDetails = {
         $index = $checkList.SelectedIndex
         if ($index -lt 0) { $index = 0 }
@@ -240,6 +504,20 @@ function Show-TtkNewComputerSetupChecklist {
     $markAllButton.Add_Click({
         for ($i = 0; $i -lt $checkList.Items.Count; $i++) {
             $checkList.SetItemChecked($i, $true)
+        }
+    })
+
+    $transferButton.Add_Click({
+        $transferResult = Show-TtkDataTransferWizard
+        if ($transferResult.Completed) {
+            for ($i = 0; $i -lt $items.Count; $i++) {
+                if ($items[$i].Step -eq 'User data transfer') {
+                    $checkList.SetItemChecked($i, $true)
+                    $checkList.SelectedIndex = $i
+                    break
+                }
+            }
+            $details.Text = "Data transfer complete.`r`n`r`n$($transferResult.Summary)"
         }
     })
 
@@ -279,6 +557,8 @@ function Show-TtkNewComputerSetupChecklist {
 Export-ModuleMember -Function @(
     'Get-TtkDriveReport',
     'Start-TtkFileTransfer',
+    'Get-TtkExternalTransferDrives',
+    'Show-TtkDataTransferWizard',
     'Get-TtkDiskInventory',
     'Invoke-TtkCloneDiskGuide',
     'Invoke-TtkNewComputerSetupChecklist',
