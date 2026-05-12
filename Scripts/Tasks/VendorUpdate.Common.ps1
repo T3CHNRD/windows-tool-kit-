@@ -294,19 +294,132 @@ function Invoke-FrameworkVendorUpdates {
     }
 }
 
+function Select-VendorForUpdate {
+    param(
+        [Parameter(Mandatory = $true)]$Identity,
+        [Parameter(Mandatory = $true)][ValidateSet('BIOS', 'Firmware', 'Drivers')]$Mode
+    )
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $vendors = @('Dell', 'HP', 'Lenovo', 'Framework')
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Choose manufacturer for $Mode update"
+    $form.StartPosition = 'CenterScreen'
+    $form.Size = New-Object System.Drawing.Size(560, 320)
+    $form.MinimumSize = New-Object System.Drawing.Size(520, 300)
+    $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $form.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
+
+    $layout = New-Object System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = 'Fill'
+    $layout.Padding = New-Object System.Windows.Forms.Padding(16)
+    $layout.RowCount = 5
+    $layout.ColumnCount = 1
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 44)))
+    [void]$form.Controls.Add($layout)
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = "Select the official vendor workflow to use before running the $Mode update."
+    $title.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawing.FontStyle]::Bold)
+    $title.AutoSize = $true
+    $title.MaximumSize = New-Object System.Drawing.Size(500, 0)
+    $title.ForeColor = [System.Drawing.Color]::FromArgb(15, 23, 65)
+    [void]$layout.Controls.Add($title, 0, 0)
+
+    $detected = New-Object System.Windows.Forms.Label
+    $detected.Text = "Detected manufacturer: $($Identity.Manufacturer)`r`nDetected model: $($Identity.Model)`r`nDetected BIOS: $($Identity.BIOSVersion)"
+    $detected.AutoSize = $true
+    $detected.Margin = New-Object System.Windows.Forms.Padding(0, 12, 0, 12)
+    $detected.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 135)
+    [void]$layout.Controls.Add($detected, 0, 1)
+
+    $combo = New-Object System.Windows.Forms.ComboBox
+    $combo.DropDownStyle = 'DropDownList'
+    $combo.Width = 260
+    [void]$combo.Items.AddRange([object[]]$vendors)
+    $detectedIndex = [Array]::IndexOf($vendors, [string]$Identity.ManufacturerKey)
+    $combo.SelectedIndex = if ($detectedIndex -ge 0) { $detectedIndex } else { 0 }
+    [void]$layout.Controls.Add($combo, 0, 2)
+
+    $note = New-Object System.Windows.Forms.TextBox
+    $note.Multiline = $true
+    $note.ReadOnly = $true
+    $note.Dock = 'Fill'
+    $note.BorderStyle = 'FixedSingle'
+    $note.BackColor = [System.Drawing.Color]::White
+    $note.ForeColor = [System.Drawing.Color]::FromArgb(31, 41, 80)
+    $note.Text = @(
+        'Only run the workflow that matches the machine manufacturer.'
+        ''
+        'Dell uses Dell Command | Update.'
+        'HP uses HP Image Assistant / HPCMSL.'
+        'Lenovo uses Lenovo System Update.'
+        'Framework opens the official Framework BIOS and driver page because Framework does not provide a silent vendor CLI in this toolkit.'
+    ) -join [Environment]::NewLine
+    $note.Margin = New-Object System.Windows.Forms.Padding(0, 12, 0, 12)
+    [void]$layout.Controls.Add($note, 0, 3)
+
+    $buttons = New-Object System.Windows.Forms.FlowLayoutPanel
+    $buttons.Dock = 'Fill'
+    $buttons.FlowDirection = 'RightToLeft'
+    [void]$layout.Controls.Add($buttons, 0, 4)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.Size = New-Object System.Drawing.Size(100, 32)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    [void]$buttons.Controls.Add($cancel)
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'Run Selected Vendor'
+    $ok.Size = New-Object System.Drawing.Size(170, 32)
+    $ok.BackColor = [System.Drawing.Color]::FromArgb(37, 99, 235)
+    $ok.ForeColor = [System.Drawing.Color]::White
+    $ok.FlatStyle = 'Flat'
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    [void]$buttons.Controls.Add($ok)
+
+    $form.AcceptButton = $ok
+    $form.CancelButton = $cancel
+
+    if ($form.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
+        throw "$Mode update cancelled before any vendor commands were run."
+    }
+
+    return [string]$combo.SelectedItem
+}
+
 function Invoke-VendorMaintenanceUpdate {
     param(
-        [Parameter(Mandatory = $true)][ValidateSet('BIOS', 'Firmware', 'Drivers')]$Mode
+        [Parameter(Mandatory = $true)][ValidateSet('BIOS', 'Firmware', 'Drivers')]$Mode,
+        [ValidateSet('Auto', 'Dell', 'HP', 'Lenovo', 'Framework')][string]$Manufacturer = 'Auto',
+        [switch]$PromptForManufacturer
     )
 
     Ensure-TaskAdmin
     $identity = Get-SystemIdentity
+    $selectedManufacturer = $identity.ManufacturerKey
+
+    if ($Manufacturer -ne 'Auto') {
+        $selectedManufacturer = $Manufacturer
+    }
+
+    if ($PromptForManufacturer) {
+        $selectedManufacturer = Select-VendorForUpdate -Identity $identity -Mode $Mode
+    }
 
     Write-Output ("Detected manufacturer: {0}" -f $identity.Manufacturer)
     Write-Output ("Detected model: {0}" -f $identity.Model)
     Write-Output ("Detected BIOS version: {0}" -f $identity.BIOSVersion)
+    Write-Output ("Selected vendor workflow: {0}" -f $selectedManufacturer)
 
-    switch ($identity.ManufacturerKey) {
+    switch ($selectedManufacturer) {
         'Dell' {
             $updateType = switch ($Mode) {
                 'BIOS' { 'bios' }
@@ -345,7 +458,7 @@ function Invoke-VendorMaintenanceUpdate {
         }
     }
 
-    Write-Output ("{0} update workflow completed for {1}." -f $Mode, $identity.ManufacturerKey)
+    Write-Output ("{0} update workflow completed for {1}." -f $Mode, $selectedManufacturer)
 }
 
 function Get-PendingWindowsUpdates {

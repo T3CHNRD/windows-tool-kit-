@@ -306,8 +306,8 @@ function Get-Palette {
 $form                  = New-Object System.Windows.Forms.Form
 $form.Text             = "T3CHNRD's Windows Tool Kit"
 $form.StartPosition    = 'CenterScreen'
-$form.Size             = New-Object System.Drawing.Size(1400, 880)
-$form.MinimumSize      = New-Object System.Drawing.Size(1100, 700)
+$form.Size             = New-Object System.Drawing.Size(1480, 900)
+$form.MinimumSize      = New-Object System.Drawing.Size(1220, 760)
 $form.BackColor        = [System.Drawing.Color]::FromArgb(11, 13, 18)
 $form.Font             = New-Object System.Drawing.Font('Segoe UI', 10)
 $form.KeyPreview       = $true
@@ -501,10 +501,10 @@ $rightLayout.Padding   = New-Object System.Windows.Forms.Padding(14, 12, 14, 12)
 [void]$mainSplit.Panel2.Controls.Add($rightLayout)
 
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))   # 0 selected label
-[void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 130))) # 1 desc
+[void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 150))) # 1 desc
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))   # 2 meta
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 52)))  # 3 run btn
-[void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 60)))  # 4 progress
+[void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 70)))  # 4 progress
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))   # 5 health header
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 90)))  # 6 health grid
 [void]$rightLayout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100))) # 7 log
@@ -530,6 +530,8 @@ $rpDescBox.Font        = New-Object System.Drawing.Font('Segoe UI', 10)
 $rpDescBox.ScrollBars  = 'Vertical'
 $rpDescBox.Text        = 'Select a tool to see details.'
 $rpDescBox.Margin      = New-Object System.Windows.Forms.Padding(0, 0, 0, 8)
+$rpDescBox.TabStop     = $false
+$rpDescBox.HideSelection = $true
 [void]$rightLayout.Controls.Add($rpDescBox, 0, 1)
 
 # Row 2 — meta strip
@@ -587,6 +589,7 @@ $cancelBtn.BackColor   = [System.Drawing.Color]::FromArgb(248, 113, 113)
 $cancelBtn.ForeColor   = [System.Drawing.Color]::White
 $cancelBtn.FlatAppearance.BorderSize = 0
 $cancelBtn.Enabled     = $false
+$cancelBtn.Visible     = $false
 [void]$progressPanel.Controls.Add($cancelBtn)
 
 $progressPanel.Add_Resize({
@@ -804,14 +807,14 @@ function New-ToolCard {
 
     $pal        = Get-Palette
     $isSimple   = $script:IsSimpleMode
-    $cardW      = if ($isSimple) { 280 } else { 220 }
-    $cardH      = if ($isSimple) { 120 } else { 110 }
+    $cardW      = if ($isSimple) { 310 } else { 250 }
+    $cardH      = if ($isSimple) { 128 } else { 118 }
 
     $card                  = New-Object System.Windows.Forms.Panel
     $card.Size             = New-Object System.Drawing.Size($cardW, $cardH)
     $card.BackColor        = $pal.CardBack
     $card.Cursor           = [System.Windows.Forms.Cursors]::Hand
-    $card.Margin           = New-Object System.Windows.Forms.Padding(6)
+    $card.Margin           = New-Object System.Windows.Forms.Padding(8)
     $card.Tag              = $TaskId
 
     # Border effect via Paint
@@ -833,10 +836,14 @@ function New-ToolCard {
     # Icon
     $iconLbl               = New-Object System.Windows.Forms.Label
     $iconLbl.Text          = $Icon
-    $iconFontSize          = if ($isSimple) { 22 } else { 16 }
+    $iconFontSize          = if ($isSimple) { 20 } else { 15 }
     $iconLbl.Font          = New-Object System.Drawing.Font('Segoe UI Emoji', $iconFontSize)
-    $iconLbl.AutoSize      = $true
-    $iconLbl.Location      = New-Object System.Drawing.Point(10, 8)
+    $iconLbl.AutoSize      = $false
+    $iconLbl.Size          = if ($isSimple) { New-Object System.Drawing.Size(44, 44) } else { New-Object System.Drawing.Size(38, 38) }
+    $iconLbl.Location      = New-Object System.Drawing.Point(12, 12)
+    $iconLbl.TextAlign     = 'MiddleCenter'
+    $iconLbl.BackColor     = if ($isSimple) { [System.Drawing.Color]::FromArgb(235, 242, 255) } else { [System.Drawing.Color]::FromArgb(24, 28, 40) }
+    $iconLbl.ForeColor     = $pal.Text
     [void]$card.Controls.Add($iconLbl)
 
     # Pro badge
@@ -858,10 +865,10 @@ function New-ToolCard {
     $nameFontSize          = if ($isSimple) { 12 } else { 10 }
     $nameLbl.Font          = New-Object System.Drawing.Font('Segoe UI Semibold', $nameFontSize, [System.Drawing.FontStyle]::Bold)
     $nameLbl.ForeColor     = $pal.Text
-    $nameLbl.MaximumSize   = New-Object System.Drawing.Size(($cardW - 18), 0)
+    $nameLbl.MaximumSize   = New-Object System.Drawing.Size(($cardW - 76), 0)
     $nameLbl.AutoSize      = $true
-    $nameY                 = if ($isSimple) { 46 } else { 40 }
-    $nameLbl.Location      = New-Object System.Drawing.Point(10, $nameY)
+    $nameY                 = if ($isSimple) { 20 } else { 18 }
+    $nameLbl.Location      = New-Object System.Drawing.Point(66, $nameY)
     [void]$card.Controls.Add($nameLbl)
 
     # Desc
@@ -870,10 +877,10 @@ function New-ToolCard {
     $descFontSize          = if ($isSimple) { 9 } else { 8 }
     $descLbl.Font          = New-Object System.Drawing.Font('Segoe UI', $descFontSize)
     $descLbl.ForeColor     = $pal.TextMid
-    $descLbl.MaximumSize   = New-Object System.Drawing.Size(($cardW - 18), 0)
+    $descLbl.MaximumSize   = New-Object System.Drawing.Size(($cardW - 24), 0)
     $descLbl.AutoSize      = $true
-    $descY                 = if ($isSimple) { 72 } else { 62 }
-    $descLbl.Location      = New-Object System.Drawing.Point(10, $descY)
+    $descY                 = if ($isSimple) { 72 } else { 66 }
+    $descLbl.Location      = New-Object System.Drawing.Point(12, $descY)
     [void]$card.Controls.Add($descLbl)
 
     # Hover
@@ -1139,6 +1146,7 @@ function Complete-CurrentTask {
 
     $runBtn.Enabled = $true
     $cancelBtn.Enabled = $false
+    $cancelBtn.Visible = $false
     Set-Progress $(if ($success) { 100 } else { 0 })
     $statusLabel.Text = if ($success) { "Completed: $($task.Name)" } else { "Failed: $($task.Name)" }
     Add-LogLine $(if ($success) { "$($task.Name) completed successfully." } else { "$($task.Name) failed: $message" })
@@ -1277,6 +1285,7 @@ $runBtn.Add_Click({
     Set-Progress 0
     $runBtn.Enabled    = $false
     $cancelBtn.Enabled = $true
+    $cancelBtn.Visible = $true
 
     Add-LogLine "Starting: $($task.Name)"
 
@@ -1286,6 +1295,7 @@ $runBtn.Add_Click({
     } catch {
         $runBtn.Enabled    = $true
         $cancelBtn.Enabled = $false
+        $cancelBtn.Visible = $false
         Add-LogLine "ERROR: $_"
         $statusLabel.Text  = "Error — see log for details"
     }
@@ -1297,6 +1307,7 @@ $cancelBtn.Add_Click({
     $taskMonitorTimer.Stop()
     $statusLabel.Text  = 'Cancelled.'
     $cancelBtn.Enabled = $false
+    $cancelBtn.Visible = $false
     $runBtn.Enabled    = $true
     Add-LogLine 'Task cancelled by user.'
     Clear-TaskProcessFiles
@@ -1340,6 +1351,8 @@ function Apply-Mode {
 
     $runBtn.BackColor   = $pal.RunBtn
     $runBtn.ForeColor   = $pal.RunBtnText
+    $script:CardBorderPen.Color = $pal.CardBorder
+    $cancelBtn.Visible = Test-TaskRunning
 
     # Simple-mode specific changes
     $tabStrip.Visible              = -not $simple
@@ -1349,7 +1362,7 @@ function Apply-Mode {
     $logBox.Visible                = -not $simple
 
     if ($simple) {
-        $modeToggleBtn.Text        = '⚙️  Switch to IT Pro Mode'
+        $modeToggleBtn.Text        = 'Switch to IT Pro Mode'
         $modeToggleBtn.BackColor   = [System.Drawing.Color]::FromArgb(22, 163, 74)
         $modeSubLabel.Text         = 'Simple Mode — friendly & safe'
         $modeSubLabel.ForeColor    = [System.Drawing.Color]::FromArgb(22, 163, 74)
@@ -1362,14 +1375,15 @@ function Apply-Mode {
         $navList.Items.Clear()
         foreach ($item in $script:SimpleNavItems) { [void]$navList.Items.Add($item) }
 
-        $toolNameLabel.Text = '🙂  What would you like to fix today?'
+        $toolNameLabel.Text = 'What would you like to fix today?'
         $toolDescLabel.Text = 'Pick something below — each tool explains what it does before starting.'
-        $rpDescBox.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+        $rpDescBox.BackColor = [System.Drawing.Color]::FromArgb(248, 251, 255)
         $rpDescBox.ForeColor = [System.Drawing.Color]::FromArgb(15, 23, 65)
+        $rpDescBox.BorderStyle = 'FixedSingle'
 
         Populate-SimpleCards
     } else {
-        $modeToggleBtn.Text        = '🙂  Switch to Simple Mode'
+        $modeToggleBtn.Text        = 'Switch to Simple Mode'
         $modeToggleBtn.BackColor   = [System.Drawing.Color]::FromArgb(79, 142, 247)
         $modeSubLabel.Text         = 'IT Pro Mode'
         $modeSubLabel.ForeColor    = [System.Drawing.Color]::FromArgb(69, 79, 102)
@@ -1391,10 +1405,11 @@ function Apply-Mode {
             [void]$tabStrip.TabPages.Add($tp)
         }
 
-        $toolNameLabel.Text = '⚙️  IT Pro Mode'
+        $toolNameLabel.Text = 'IT Pro Mode'
         $toolDescLabel.Text = 'Select a category from the tabs or sidebar to browse tools.'
         $rpDescBox.BackColor = [System.Drawing.Color]::FromArgb(24, 28, 40)
         $rpDescBox.ForeColor = $pal.TextMid
+        $rpDescBox.BorderStyle = 'FixedSingle'
         Populate-ProCards -Category ($script:CategoryOrder | Select-Object -First 1)
     }
 
@@ -1471,7 +1486,7 @@ function Apply-ResponsiveLayout {
     if ($bodySplit.Width -le 0 -or $mainSplit.Width -le 0) { return }
 
     try {
-        $sidebarWidth = if ($script:IsSimpleMode) { 170 } else { 210 }
+        $sidebarWidth = if ($script:IsSimpleMode) { 190 } else { 220 }
         $bodyWidth = [int]$bodySplit.Width
         if ($bodyWidth -gt 60) {
             # FIX: MARKET-01 - never increase MinSize before the splitter is known valid for the current width.
@@ -1492,9 +1507,9 @@ function Apply-ResponsiveLayout {
         $available = [int]$mainSplit.Width
         if ($available -le 0) { return }
 
-        $desiredRight = if ($script:IsSimpleMode) { 350 } else { 390 }
+        $desiredRight = if ($script:IsSimpleMode) { 410 } else { 440 }
         if ($available -lt 720) {
-            $desiredRight = [Math]::Max(240, [Math]::Floor($available * 0.34))
+            $desiredRight = [Math]::Max(280, [Math]::Floor($available * 0.36))
         }
 
         # FIX: MARKET-01 - keep SplitContainer MinSize at 1 to avoid DPI/startup crashes.

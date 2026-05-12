@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $updateToolsModule = Join-Path (Join-Path $PSScriptRoot '..') 'UpdateTools\UpdateTools.psm1'
@@ -615,6 +615,17 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Storage.DriveScanRepair'
+            Name = 'Scan and Repair Drives'
+            Category = 'Storage / Setup'
+            Description = 'Scans internal and external drives with Windows volume health checks and chkdsk; repairs removable drives when safe.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DriveScanRepair.ps1' -StepName 'Drive scan and repair'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Security.BaselineAudit'
             Name = 'Windows Security Baseline Audit'
             Category = 'Security'
@@ -692,6 +703,28 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Security.BitLockerBackup'
+            Name = 'Backup BitLocker Recovery Keys'
+            Category = 'Security'
+            Description = 'Backs up BitLocker recovery-password protectors to detected removable/external media without printing the keys in the toolkit log.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-BackupBitLockerKeys.ps1' -StepName 'Backup BitLocker recovery keys'
+            }
+        },
+        [pscustomobject]@{
+            Id = 'Security.BitLockerDisable'
+            Name = 'Turn Off BitLocker'
+            Category = 'Security'
+            Description = 'Disables BitLocker protection and starts decryption for protected volumes. Back up recovery keys first.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-DisableBitLocker.ps1' -StepName 'Turn off BitLocker'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Storage.CloneGuide'
             Name = 'Clone Disk Guide'
             Category = 'Storage / Setup'
@@ -710,15 +743,15 @@ function Get-ToolkitTaskCatalog {
             Id = 'Storage.NewComputerSetup'
             Name = 'New Computer Setup Checklist'
             Category = 'Storage / Setup'
-            Description = 'Writes the standard new-computer setup checklist to the execution log for guided deployment work.'
+            Description = 'Opens an interactive new-computer setup checklist showing Windows updates, vendor updates, apps, security, BitLocker key backup, data transfer, and final validation steps.'
             RequiresAdmin = $false
             Handler = {
                 param($Context, $Task)
                 Invoke-TaskStep -Context $Context -Percent 20 -Status 'Preparing new computer setup checklist' -LogMessage 'Opening new computer setup checklist.'
-                foreach ($line in (Invoke-TtkNewComputerSetupChecklist)) {
+                foreach ($line in (Show-TtkNewComputerSetupChecklist)) {
                     & $Context.WriteLog $line 'INFO'
                 }
-                Invoke-TaskStep -Context $Context -Percent 100 -Status 'New computer setup checklist complete' -LogMessage 'New computer setup checklist written to the log.'
+                Invoke-TaskStep -Context $Context -Percent 100 -Status 'New computer setup checklist complete' -LogMessage 'New computer setup checklist reviewed.'
             }
         },
         [pscustomobject]@{

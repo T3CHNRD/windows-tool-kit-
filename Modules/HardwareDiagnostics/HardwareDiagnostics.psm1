@@ -88,6 +88,42 @@ function Test-TtkMouseKeyboardActivity {
     $keyboardPanel.RowCount = 7
     [void]$layout.Controls.Add($keyboardPanel, 0, 3)
 
+    function ConvertTo-KeyDefinitionList {
+        param([object[]]$Keys)
+
+        $definitions = New-Object 'System.Collections.Generic.List[object]'
+        $index = 0
+        while ($index -lt $Keys.Count) {
+            $current = $Keys[$index]
+            if ($current -is [array] -and $current.Count -ge 2) {
+                $definitions.Add([pscustomobject]@{
+                    Label = [string]$current[0]
+                    Code  = [string]$current[1]
+                    Width = if ($current.Count -gt 2) { [int]$current[2] } else { 56 }
+                })
+                $index++
+                continue
+            }
+
+            $label = [string]$Keys[$index]
+            $code = if (($index + 1) -lt $Keys.Count) { [string]$Keys[$index + 1] } else { $label }
+            $width = 56
+            $index += 2
+            if (($index -lt $Keys.Count) -and ($Keys[$index] -is [int])) {
+                $width = [int]$Keys[$index]
+                $index++
+            }
+
+            $definitions.Add([pscustomobject]@{
+                Label = $label
+                Code  = $code
+                Width = $width
+            })
+        }
+
+        return $definitions
+    }
+
     function Add-KeyRow {
         param(
             [Parameter(Mandatory = $true)][object[]]$Keys
@@ -100,10 +136,10 @@ function Test-TtkMouseKeyboardActivity {
         $row.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 4)
         [void]$keyboardPanel.Controls.Add($row)
 
-        foreach ($keyDef in $Keys) {
-            $label = [string]$keyDef[0]
-            $keyCode = [System.Windows.Forms.Keys]$keyDef[1]
-            $width = if ($keyDef.Count -gt 2) { [int]$keyDef[2] } else { 56 }
+        foreach ($keyDef in (ConvertTo-KeyDefinitionList -Keys $Keys)) {
+            $label = $keyDef.Label
+            $keyCode = [System.Enum]::Parse([System.Windows.Forms.Keys], $keyDef.Code, $true)
+            $width = [int]$keyDef.Width
 
             $button = New-Object System.Windows.Forms.Button
             $button.Text = $label
@@ -112,6 +148,7 @@ function Test-TtkMouseKeyboardActivity {
             $button.Height = 38
             $button.Margin = New-Object System.Windows.Forms.Padding(3)
             $button.FlatStyle = 'Flat'
+            $button.TabStop = $false
             $button.BackColor = $missingColor
             $button.ForeColor = [System.Drawing.Color]::White
             [void]$row.Controls.Add($button)
@@ -133,11 +170,11 @@ function Test-TtkMouseKeyboardActivity {
     )
     Add-KeyRow -Keys @(
         @('Tab', 'Tab', 82), @('Q', 'Q'), @('W', 'W'), @('E', 'E'), @('R', 'R'), @('T', 'T'), @('Y', 'Y'),
-        @('U', 'U'), @('I', 'I'), @('O', 'O'), @('P', 'P'), @('[{', 'OemOpenBrackets'), @(']}', 'OemCloseBrackets'), @('\|', 'OemPipe', 78)
+        @('U', 'U'), @('I', 'I'), @('O', 'O'), @('P', 'P'), @('[{', 'OemOpenBrackets'), @(']}', 'Oem6'), @('\|', 'Oem5', 78)
     )
     Add-KeyRow -Keys @(
         @('Caps', 'Capital', 94), @('A', 'A'), @('S', 'S'), @('D', 'D'), @('F', 'F'), @('G', 'G'), @('H', 'H'),
-        @('J', 'J'), @('K', 'K'), @('L', 'L'), @(';:', 'OemSemicolon'), @("'`"", 'OemQuotes'), @('Enter', 'Return', 106)
+        @('J', 'J'), @('K', 'K'), @('L', 'L'), @(';:', 'Oem1'), @("'`"", 'Oem7'), @('Enter', 'Return', 106)
     )
     Add-KeyRow -Keys @(
         @('Shift', 'ShiftKey', 118), @('Z', 'Z'), @('X', 'X'), @('C', 'C'), @('V', 'V'), @('B', 'B'), @('N', 'N'),
@@ -208,12 +245,26 @@ function Test-TtkMouseKeyboardActivity {
         $form.Text = "Mouse & Keyboard Test - $Message"
     }
 
+    function Resolve-KeyAlias {
+        param([System.Windows.Forms.Keys]$KeyCode)
+
+        switch ([string]$KeyCode) {
+            'LShiftKey' { return 'ShiftKey' }
+            'RShiftKey' { return 'ShiftKey' }
+            'LControlKey' { return 'ControlKey' }
+            'RControlKey' { return 'ControlKey' }
+            'LMenu' { return 'Menu' }
+            'RMenu' { return 'Menu' }
+            default { return [string]$KeyCode }
+        }
+    }
+
     function Mark-KeyDetected {
         param(
             [Parameter(Mandatory = $true)][System.Windows.Forms.Keys]$KeyCode
         )
 
-        $keyText = [string]$KeyCode
+        $keyText = Resolve-KeyAlias -KeyCode $KeyCode
         [void]$detectedKeys.Add($keyText)
         if ($keyButtons.ContainsKey($keyText)) {
             foreach ($button in $keyButtons[$keyText]) {
@@ -510,3 +561,4 @@ Export-ModuleMember -Function @(
     'Test-TtkMouseKeyboardActivity',
     'Start-TtkMonitorPixelTest'
 )
+

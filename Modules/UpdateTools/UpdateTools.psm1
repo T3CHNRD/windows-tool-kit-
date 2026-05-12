@@ -6,25 +6,25 @@ $script:TaskRoot = Join-Path $script:ToolkitRoot 'Scripts\Tasks'
 . (Join-Path $script:TaskRoot 'VendorUpdate.Common.ps1')
 
 function Get-TtkSupportedUpdateManufacturers {
-    return @('Dell', 'HP', 'Lenovo')
+    return @('Dell', 'HP', 'Lenovo', 'Framework')
 }
 
 function Invoke-TtkBiosUpdate {
     [CmdletBinding()]
     param()
-    Invoke-VendorMaintenanceUpdate -Mode BIOS
+    Invoke-VendorMaintenanceUpdate -Mode BIOS -PromptForManufacturer
 }
 
 function Invoke-TtkFirmwareUpdate {
     [CmdletBinding()]
     param()
-    Invoke-VendorMaintenanceUpdate -Mode Firmware
+    Invoke-VendorMaintenanceUpdate -Mode Firmware -PromptForManufacturer
 }
 
 function Invoke-TtkDriverUpdate {
     [CmdletBinding()]
     param()
-    Invoke-VendorMaintenanceUpdate -Mode Drivers
+    Invoke-VendorMaintenanceUpdate -Mode Drivers -PromptForManufacturer
 }
 
 function Invoke-TtkWindowsUpdate {
