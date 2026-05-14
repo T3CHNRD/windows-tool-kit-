@@ -846,18 +846,29 @@ function Get-ToolkitTaskCatalog {
             }
         },
         [pscustomobject]@{
+            Id = 'Security.SecureBoot2023Update'
+            Name = 'Secure Boot 2023 Certificate Update'
+            Category = 'Security'
+            Description = 'Runs the Secure Boot 2023 certificate update remediation script and writes the append-safe result report to a Desktop folder instead of the P: drive.'
+            RequiresAdmin = $true
+            Handler = {
+                param($Context, $Task)
+                Invoke-ToolkitScriptTask -Context $Context -ScriptName 'Invoke-SecureBoot2023Update.ps1' -StepName 'Secure Boot 2023 certificate update'
+            }
+        },
+        [pscustomobject]@{
             Id = 'Storage.CloneGuide'
-            Name = 'Clone Disk Guide'
+            Name = 'Clone Disk Wizard'
             Category = 'Storage / Setup'
-            Description = 'Shows the guided disk-cloning checklist and safety steps before running an imaging workflow.'
+            Description = 'Opens a guided disk-cloning wizard that inventories disks, helps pick source and destination disks, saves a clone plan, and launches Windows disk/imaging workflows.'
             RequiresAdmin = $false
             Handler = {
                 param($Context, $Task)
-                Invoke-TaskStep -Context $Context -Percent 20 -Status 'Preparing clone disk guidance' -LogMessage 'Opening clone disk guidance.'
+                Invoke-TaskStep -Context $Context -Percent 20 -Status 'Opening clone disk wizard' -LogMessage 'Opening clone disk wizard.'
                 foreach ($line in (Invoke-TtkCloneDiskGuide)) {
                     & $Context.WriteLog $line 'INFO'
                 }
-                Invoke-TaskStep -Context $Context -Percent 100 -Status 'Clone disk guidance complete' -LogMessage 'Clone disk guidance displayed in the log.'
+                Invoke-TaskStep -Context $Context -Percent 100 -Status 'Clone disk wizard complete' -LogMessage 'Clone disk wizard closed.'
             }
         },
         [pscustomobject]@{

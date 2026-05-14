@@ -13,10 +13,11 @@ PowerShell-based desktop toolkit with a unified WinForms launcher for maintenanc
   - Temp/junk cleanup and C: drive free-space cleanup
   - Disk space monitoring
   - Data Transfer Wizard using `robocopy` for old-to-new PC or external-drive transfers
+  - Clone Disk Wizard that inventories disks, saves a source/destination clone plan, and launches Windows disk/imaging workflows
   - Update all apps with `winget`
   - Windows repair checks (`DISM` + `SFC`)
   - Debloat helper (KillerTools DEBLOAT-inspired installed app inventory export)
-  - Security audit tools including Defender, privacy, persistence, browser-extension, encryption/hash, BitLocker, and open-port reviews
+  - Security audit tools including Defender, privacy, persistence, browser-extension, encryption/hash, BitLocker, Secure Boot 2023 certificate update, and open-port reviews
 - External integrations:
   - `mallockey/Install-Microsoft365` wrapper
   - Microsoft official Media Creation Tool workflow wrapper
@@ -73,3 +74,6 @@ Output:
 - Copy the full portable folder to USB, not just the EXE.
 - Run the EXE from inside that folder so relative paths resolve.
 - For admin-required tasks, run from an elevated context.
+
+## Secure Boot Report Note
+The Secure Boot 2023 Certificate Update task is integrated under `Security`. The toolkit copy writes its report and local log to `Desktop\T3CHNRD-SecureBoot2023` instead of the original `P:` drive path.

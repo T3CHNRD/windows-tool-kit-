@@ -328,12 +328,234 @@ function Invoke-TtkCloneDiskGuide {
     [CmdletBinding()]
     param()
 
+    return Show-TtkCloneDiskWizard
+}
+
+function Show-TtkCloneDiskWizard {
+    [CmdletBinding()]
+    param()
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+    $logDir = Join-Path $root 'Logs'
+    if (-not (Test-Path -LiteralPath $logDir)) {
+        New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+    }
+
+    $result = [pscustomobject]@{
+        ReportPath = $null
+        SourceDisk = $null
+        DestinationDisk = $null
+        OpenedDiskManagement = $false
+        OpenedBackup = $false
+    }
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Clone Disk Wizard'
+    $form.StartPosition = 'CenterScreen'
+    $form.Size = New-Object System.Drawing.Size(900, 650)
+    $form.MinimumSize = New-Object System.Drawing.Size(820, 560)
+    $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $form.BackColor = [System.Drawing.Color]::FromArgb(245, 248, 255)
+
+    $layout = New-Object System.Windows.Forms.TableLayoutPanel
+    $layout.Dock = 'Fill'
+    $layout.RowCount = 6
+    $layout.ColumnCount = 1
+    $layout.Padding = New-Object System.Windows.Forms.Padding(14)
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 95)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 55)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 42)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 42)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 45)))
+    [void]$layout.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 50)))
+    [void]$form.Controls.Add($layout)
+
+    $intro = New-Object System.Windows.Forms.TextBox
+    $intro.Multiline = $true
+    $intro.ReadOnly = $true
+    $intro.BorderStyle = 'FixedSingle'
+    $intro.Dock = 'Fill'
+    $intro.BackColor = [System.Drawing.Color]::White
+    $intro.Text = "This wizard helps you plan a disk clone safely. It does not silently wipe or clone disks.`r`n`r`nChoose a SOURCE disk and a DESTINATION disk, save the plan, then launch Disk Management, Windows Backup, or your trusted imaging software to perform the actual sector copy. Always back up important data first."
+    [void]$layout.Controls.Add($intro, 0, 0)
+
+    $grid = New-Object System.Windows.Forms.DataGridView
+    $grid.Dock = 'Fill'
+    $grid.ReadOnly = $true
+    $grid.AllowUserToAddRows = $false
+    $grid.AllowUserToDeleteRows = $false
+    $grid.AutoSizeColumnsMode = 'Fill'
+    $grid.SelectionMode = 'FullRowSelect'
+    [void]$layout.Controls.Add($grid, 0, 1)
+
+    $sourcePanel = New-Object System.Windows.Forms.FlowLayoutPanel
+    $sourcePanel.Dock = 'Fill'
+    $sourcePanel.FlowDirection = 'LeftToRight'
+    $sourcePanel.WrapContents = $false
+    [void]$layout.Controls.Add($sourcePanel, 0, 2)
+
+    $sourceLabel = New-Object System.Windows.Forms.Label
+    $sourceLabel.Text = 'Source disk to copy from:'
+    $sourceLabel.Width = 180
+    $sourceLabel.TextAlign = 'MiddleLeft'
+    [void]$sourcePanel.Controls.Add($sourceLabel)
+
+    $sourceCombo = New-Object System.Windows.Forms.ComboBox
+    $sourceCombo.DropDownStyle = 'DropDownList'
+    $sourceCombo.Width = 650
+    [void]$sourcePanel.Controls.Add($sourceCombo)
+
+    $destPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+    $destPanel.Dock = 'Fill'
+    $destPanel.FlowDirection = 'LeftToRight'
+    $destPanel.WrapContents = $false
+    [void]$layout.Controls.Add($destPanel, 0, 3)
+
+    $destLabel = New-Object System.Windows.Forms.Label
+    $destLabel.Text = 'Destination disk to overwrite:'
+    $destLabel.Width = 180
+    $destLabel.TextAlign = 'MiddleLeft'
+    [void]$destPanel.Controls.Add($destLabel)
+
+    $destCombo = New-Object System.Windows.Forms.ComboBox
+    $destCombo.DropDownStyle = 'DropDownList'
+    $destCombo.Width = 650
+    [void]$destPanel.Controls.Add($destCombo)
+
+    $details = New-Object System.Windows.Forms.TextBox
+    $details.Multiline = $true
+    $details.ReadOnly = $true
+    $details.ScrollBars = 'Vertical'
+    $details.Dock = 'Fill'
+    $details.Text = @(
+        'Clone workflow:',
+        '1. Confirm the source disk is the disk you want copied.',
+        '2. Confirm the destination disk is the disk that may be overwritten.',
+        '3. Save this clone plan report.',
+        '4. Use Disk Management, Windows Backup/System Image, or trusted vendor imaging software to perform the clone.',
+        '5. After cloning, validate boot order and disk health before wiping the old disk.',
+        '',
+        'Safety note: a true clone overwrites the destination disk. This toolkit intentionally does not auto-run destructive clone commands without a dedicated imaging engine and explicit operator confirmation.'
+    ) -join [Environment]::NewLine
+    [void]$layout.Controls.Add($details, 0, 4)
+
+    $buttonPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+    $buttonPanel.Dock = 'Fill'
+    $buttonPanel.FlowDirection = 'RightToLeft'
+    [void]$layout.Controls.Add($buttonPanel, 0, 5)
+
+    $closeButton = New-Object System.Windows.Forms.Button
+    $closeButton.Text = 'Close'
+    $closeButton.Width = 110
+    [void]$buttonPanel.Controls.Add($closeButton)
+
+    $saveButton = New-Object System.Windows.Forms.Button
+    $saveButton.Text = 'Save Clone Plan'
+    $saveButton.Width = 150
+    [void]$buttonPanel.Controls.Add($saveButton)
+
+    $backupButton = New-Object System.Windows.Forms.Button
+    $backupButton.Text = 'Open Windows Backup'
+    $backupButton.Width = 170
+    [void]$buttonPanel.Controls.Add($backupButton)
+
+    $diskMgmtButton = New-Object System.Windows.Forms.Button
+    $diskMgmtButton.Text = 'Open Disk Management'
+    $diskMgmtButton.Width = 180
+    [void]$buttonPanel.Controls.Add($diskMgmtButton)
+
+    $refreshButton = New-Object System.Windows.Forms.Button
+    $refreshButton.Text = 'Refresh Disks'
+    $refreshButton.Width = 130
+    [void]$buttonPanel.Controls.Add($refreshButton)
+
+    $loadDisks = {
+        $sourceCombo.Items.Clear()
+        $destCombo.Items.Clear()
+        try {
+            $disks = @(Get-TtkDiskInventory | ForEach-Object {
+                    [pscustomobject]@{
+                        Number = $_.Number
+                        Name = $_.FriendlyName
+                        BusType = $_.BusType
+                        PartitionStyle = $_.PartitionStyle
+                        SizeGB = [math]::Round($_.Size / 1GB, 2)
+                        Status = ($_.OperationalStatus -join ', ')
+                    }
+                })
+            $grid.DataSource = $disks
+            foreach ($disk in $disks) {
+                $display = 'Disk {0}: {1} | {2} | {3} GB | {4}' -f $disk.Number, $disk.Name, $disk.BusType, $disk.SizeGB, $disk.Status
+                [void]$sourceCombo.Items.Add($display)
+                [void]$destCombo.Items.Add($display)
+            }
+            if ($sourceCombo.Items.Count -gt 0) { $sourceCombo.SelectedIndex = 0 }
+            if ($destCombo.Items.Count -gt 1) { $destCombo.SelectedIndex = 1 }
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show("Unable to read disk inventory:`r`n$($_.Exception.Message)", 'Disk Inventory', 'OK', 'Warning') | Out-Null
+        }
+    }
+
+    $refreshButton.Add_Click($loadDisks)
+    $diskMgmtButton.Add_Click({
+        Start-Process -FilePath 'diskmgmt.msc'
+        $result.OpenedDiskManagement = $true
+    })
+    $backupButton.Add_Click({
+        try {
+            Start-Process -FilePath 'control.exe' -ArgumentList '/name Microsoft.BackupAndRestore'
+        }
+        catch {
+            Start-Process -FilePath 'sdclt.exe'
+        }
+        $result.OpenedBackup = $true
+    })
+    $saveButton.Add_Click({
+        if ($sourceCombo.SelectedIndex -lt 0 -or $destCombo.SelectedIndex -lt 0) {
+            [System.Windows.Forms.MessageBox]::Show('Select both a source disk and a destination disk first.', 'Clone Plan', 'OK', 'Warning') | Out-Null
+            return
+        }
+        if ($sourceCombo.SelectedItem -eq $destCombo.SelectedItem) {
+            [System.Windows.Forms.MessageBox]::Show('Source and destination cannot be the same disk.', 'Clone Plan', 'OK', 'Warning') | Out-Null
+            return
+        }
+
+        $result.SourceDisk = [string]$sourceCombo.SelectedItem
+        $result.DestinationDisk = [string]$destCombo.SelectedItem
+        $result.ReportPath = Join-Path $logDir ("CloneDiskPlan-{0:yyyyMMdd-HHmmss}.txt" -f (Get-Date))
+        $report = @(
+            "Clone Disk Plan - $(Get-Date)",
+            '',
+            "Source: $($result.SourceDisk)",
+            "Destination: $($result.DestinationDisk)",
+            '',
+            'Important: This report is a plan only. Use Disk Management, Windows Backup/System Image, or trusted imaging software to perform the actual clone.',
+            'Do not proceed unless the destination disk is safe to overwrite.',
+            '',
+            'Detected disks:'
+        )
+        foreach ($row in @($grid.DataSource)) {
+            $report += 'Disk {0}: {1} | {2} | {3} GB | {4} | {5}' -f $row.Number, $row.Name, $row.BusType, $row.SizeGB, $row.PartitionStyle, $row.Status
+        }
+        Set-Content -LiteralPath $result.ReportPath -Value $report -Encoding UTF8
+        [System.Windows.Forms.MessageBox]::Show("Clone plan saved:`r`n$($result.ReportPath)", 'Clone Plan Saved', 'OK', 'Information') | Out-Null
+    })
+    $closeButton.Add_Click({ $form.Close() })
+
+    & $loadDisks
+    [void]$form.ShowDialog()
+
     return @(
-        'Disk cloning is orchestrated as a guided workflow.',
-        '1. Back up important data before continuing.',
-        '2. Connect the destination disk and confirm it is the correct target.',
-        '3. Use manufacturer or imaging software for the actual sector copy when required.',
-        '4. Validate boot order and disk health after the clone completes.'
+        'Clone Disk Wizard opened.',
+        'This toolkit does not silently run destructive sector-copy commands.',
+        'Use the wizard to choose source/destination disks, save a clone plan, and launch Disk Management or Windows Backup.',
+        $(if ($result.ReportPath) { "Clone plan report: $($result.ReportPath)" } else { 'No clone plan report was saved.' }),
+        $(if ($result.OpenedDiskManagement) { 'Disk Management was opened.' } else { 'Disk Management was not opened.' }),
+        $(if ($result.OpenedBackup) { 'Windows Backup was opened.' } else { 'Windows Backup was not opened.' })
     )
 }
 
@@ -561,6 +783,7 @@ Export-ModuleMember -Function @(
     'Show-TtkDataTransferWizard',
     'Get-TtkDiskInventory',
     'Invoke-TtkCloneDiskGuide',
+    'Show-TtkCloneDiskWizard',
     'Invoke-TtkNewComputerSetupChecklist',
     'Get-TtkNewComputerSetupChecklistItems',
     'Show-TtkNewComputerSetupChecklist'
